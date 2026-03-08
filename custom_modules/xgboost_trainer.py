@@ -39,6 +39,7 @@ fold1 = dataparser.splitByDate(df, datetime(2011, 1, 1), datetime(2014, 1, 1))
 fold2 = dataparser.splitByDate(df, datetime(2014, 1, 1), datetime(2018, 1, 1))
 fold3 = dataparser.splitByDate(df, datetime(2018, 1, 1), datetime(2022, 1, 1))
 fold4 = dataparser.splitByDate(df, datetime(2022, 1, 1), datetime(2025, 1, 1))
+testFold = dataparser.splitByDate(df, datetime(2025, 1, 1), datetime(2026, 1, 1))
 
 # DEFINE DATASETS
 X_warmup, y_warmup = warmupFold[features], warmupFold["target"]
@@ -47,6 +48,7 @@ X_1, y_1 = fold1[features], fold1["target"]
 X_2, y_2 = fold2[features], fold2["target"]
 X_3, y_3 = fold3[features], fold3["target"]
 X_4, y_4 = fold4[features], fold4["target"]
+X_test, y_test = testFold[features], testFold["target"]
 
 X_folds = [X_warmup, X_warmup2, X_1, X_2, X_3, X_4]
 y_folds = [y_warmup, y_warmup2, y_1, y_2, y_3, y_4]
@@ -71,10 +73,16 @@ for x in range(1, 5):
     model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
     # predict and record
     output = model.predict_proba(X_pred)
-    xgbSignals = pd.concat([xgbSignals, pd.DataFrame(output)], ignore_index=True)
+    xgbSignals = pd.concat([xgbSignals, pd.DataFrame(output)], ignore_index=False)
+
+# LOAD AND USE FULLY-TRAINED MODEL ON TEST FOLD (2025)
+model = xgb.XGBClassifier()
+model.load_model("custom_modules/XGBoost_EUR_USD_H4_2026_v6.json")
+testPreds = model.predict_proba(X_test)
+xgbSignals = pd.concat([xgbSignals, pd.DataFrame(testPreds)], ignore_index=False)
 
 # REFORMAT FINAL OUTPUT
-rowsPredicted = pd.concat(X_folds[2:], ignore_index=False) # get predicted rows with original indexes
+rowsPredicted = pd.concat([X_1, X_2, X_3, X_4, X_test], ignore_index=False) # get rows with a prediction with original indexes
 xgbSignals.index = rowsPredicted.index # align indexes to original
 xgbSignals.rename(columns={
                            0: "xgb_0",

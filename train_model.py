@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from custom_modules.xgboost_trainer import xgbSignals
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 
 # GLOBAL VARIABLES
 hiddenSize = 64
@@ -45,9 +46,8 @@ labels = df["target"]
 features = df[featureList]
 
 # INTEGRATE XGBOOST SIGNALS
-assert features.index == xgbSignals.index, "xgbSignals has misaligned indexes" # check for index misalignment
+assert features.index.equals(xgbSignals.index), "xgbSignals has misaligned indexes" # check for index misalignment
 features = pd.concat([features, xgbSignals], axis=1)
-featureList.append["xgb_0", "xgb_1", "xgb_2"]
 features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 labels = labels[features.index] # align indexes
@@ -132,7 +132,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 
 for epoch in range(epochs):
     print(f"Beginning epoch {epoch}/{epochs}...")
-    model.train()
+    model.train() # set model to training mode
     epochLoss = 0 # initialise cumulative loss for this epoch
     for X_batch, y_batch in dataloader:
         optimiser.zero_grad() # clear gradients from previous batch
@@ -143,3 +143,38 @@ for epoch in range(epochs):
         epochLoss += loss.item() # convert tensor to normal number and add to cumulative loss
     avgLoss = epochLoss / len(dataloader)
     print(f"Epoch {epoch} average cross-entropy loss: {avgLoss:.5f}")
+
+# TEST MODEL
+model.eval() # disable dropout
+with torch.no_grad(): # disable gradient tracking to save memory
+    logits = model(X_test) # raw output of model => tensor of shape (samples, 3)
+    probs = torch.softmax(logits, dim=1) # convert to probabilities for each class (first dimension sums to 1)
+    preds = torch.argmax(probs, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+    testTrue = y_test.cpu().numpy()
+# run on training data to test for overfitting
+with torch.no_grad():
+    trainLogits = model(X_train)
+    trainProbs = torch.softmax(trainLogits, dim=1)
+    trainPreds = torch.argmax(trainProbs, dim=1).cpu().numpy()
+    trainTrue = y_train.cpu().numpy()
+
+# EVALUATE MODEL
+accuracy = accuracy_score(testTrue, preds)*100
+f1Score = f1_score(testTrue, preds, average="macro", zero_division=0)
+trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0) # compare with f1Score to check overfitting
+rocAucScore = roc_auc_score(testTrue, probs.cpu().numpy(), multi_class="ovr", average="macro")
+# precision: accuracy of positive predictions for each class (up/down)
+# recall: correctly identified positives / total true positives
+# accuracy: correct predictions / total predictions
+# F1 score: harmonic mean of precision and recall (0-1)
+# ROC-AUC score: chance that a random positive is ranked higher than a random negative (0-1)
+
+# CONFUSION MATRIX
+cmatrix = confusion_matrix(testTrue, preds)
+# returns 2x2 numpy array breaking down true/false positives/negatives
+cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=["Pred -", "Pred ~", "Pred +"])
+print(f"Accuracy: {accuracy:.3f}%")
+print(f"F1 score (macro-averaged): {f1Score:.5f}")
+print(f"F1 score (train set): {trainF1Score:.5f}")
+print(f"ROC-AUC score: {rocAucScore:.5f}")
+print(f"Confusion matrix:\n{cmatrixDf}")
