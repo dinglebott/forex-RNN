@@ -70,7 +70,7 @@ for x in range(1, 5):
     y_val = y_folds[x]
     X_pred = X_folds[x+1]
     # train
-    model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
+    model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
     # predict and record
     output = model.predict_proba(X_pred)
     xgbSignals = pd.concat([xgbSignals, pd.DataFrame(output)], ignore_index=False)

@@ -74,6 +74,13 @@ def parseData(jsonPath):
     vol_sma30 = df["volume"].rolling(30).mean()
     df["vol_ratio"] = df["volume"] / vol_sma30
     df["vol_momentum"] = df["vol_ratio"] - df["vol_ratio"].rolling(5).mean()
+    # for the xgboost
+    df["volatility_momentum"] = df["rsi_14"] * df["atr_14"]
+    for lag in (1, 3, 4):
+        df[f"vol_ratio_lag{lag}"] = df["vol_ratio"].shift(lag)
+    df["trend_strength"] = abs(df["normalised_ema15"] - df["normalised_ema50"])
+    df["dist_ema15"] = (df["close"] - df["raw_ema15"]) / df["atr_14"]
+    df["vol_trend"] = df["vol_ratio"] * df["normalised_ema50"]
     
     # drop empty rows and return
     df.dropna(inplace=True)
