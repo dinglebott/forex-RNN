@@ -1,3 +1,5 @@
+# EXPORTS:
+# xgbSignals => dataframe containing xgb predictions for 2011-2024
 import xgboost as xgb
 from . import dataparser
 from datetime import datetime
@@ -72,7 +74,7 @@ for x in range(1, 5):
     xgbSignals = pd.concat([xgbSignals, pd.DataFrame(output)], ignore_index=True)
 
 # REFORMAT FINAL OUTPUT
-rowsPredicted = pd.concat(X_folds[2:], ignore_index=False)
+rowsPredicted = pd.concat(X_folds[2:], ignore_index=False) # get predicted rows with original indexes
 xgbSignals.index = rowsPredicted.index # align indexes to original
 xgbSignals.rename(columns={
                            0: "xgb_0",

@@ -12,8 +12,15 @@ numLayers = 2
 dropOut = 0.2
 learningRate = 0.001
 lookback = 20
+epochs = 20
+batchSize = 50
 deadzone = 0.0015
-featureList = []
+featureList = ["return", "return_4", "log_return", "log_return_4",
+               "atr_14", "volatility_regime",
+               "bb_width", "bb_position",
+               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+               "normalised_ema15", "normalised_ema50", "ema_cross",
+               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,7 +45,7 @@ labels = df["target"]
 features = df[featureList]
 
 # INTEGRATE XGBOOST SIGNALS
-assert features.index == xgbSignals.index # check for index misalignment
+assert features.index == xgbSignals.index, "xgbSignals has misaligned indexes" # check for index misalignment
 features = pd.concat([features, xgbSignals], axis=1)
 featureList.append["xgb_0", "xgb_1", "xgb_2"]
 features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
@@ -115,5 +122,24 @@ model = ForexRNN(
 ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss() # function to minimise
 optimiser = torch.optim.Adam(model.parameters(), lr=learningRate)
+
+# TRAIN MODEL
+dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
+# DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
+
+for epoch in range(epochs):
+    print(f"Beginning epoch {epoch}/{epochs}...")
+    model.train()
+    epochLoss = 0 # initialise cumulative loss for this epoch
+    for X_batch, y_batch in dataloader:
+        optimiser.zero_grad() # clear gradients from previous batch
+        predictions = model(X_batch) # run the __call__ method which calls forward(X_batch)
+        loss = criterion(predictions, y_batch) # evaluate loss, returns loss tensor (1 element: the average loss across the batch)
+        loss.backward() # backpropagation, compute loss with respect to each parameter
+        optimiser.step() # adjust gradients to minimise loss
+        epochLoss += loss.item() # convert tensor to normal number and add to cumulative loss
+    avgLoss = epochLoss / len(dataloader)
+    print(f"Epoch {epoch} average cross-entropy loss: {avgLoss:.5f}")
