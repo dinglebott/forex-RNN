@@ -8,6 +8,7 @@ import pandas as pd
 
 # LOAD DATA
 df = dataparser.parseData("json_data/EUR_USD_H4_2010-01-01_2026-01-01.json")
+trainedXgbFilepath = "custom_modules/XGBoost_EUR_USD_H4_2026_v6.json"
 
 # FEATURES AND HYPERPARAMETERS (obtained from trading-trees project)
 features = ["atr_14", "volatility_momentum", "vol_ratio_lag3", "volatility_regime", "vol_ratio_lag4", "hl_spread", "normalised_ema50",
@@ -77,7 +78,7 @@ for x in range(1, 5):
 
 # LOAD AND USE FULLY-TRAINED MODEL ON TEST FOLD (2025)
 model = xgb.XGBClassifier()
-model.load_model("custom_modules/XGBoost_EUR_USD_H4_2026_v6.json")
+model.load_model(trainedXgbFilepath)
 testPreds = model.predict_proba(X_test)
 xgbSignals = pd.concat([xgbSignals, pd.DataFrame(testPreds)], ignore_index=False)
 
