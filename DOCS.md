@@ -15,7 +15,7 @@ Train: 2010-2024, Test: 2025\
 <br/>
 
 ## INITIAL FEATURE ENGINEERING
-**Scoring metric:** SHAP values\
+**Scoring metric:** Permutation importances: shuffle values of each feature and test for greatest impact on F1 score\
 **Price:**\
 Return => Percentage change from previous close\
 4-period return => Percentage change from close 4 candles prior\
@@ -54,7 +54,7 @@ Probability of each class as predicted by an XGBoost model
 
 ## MODEL EVALUATION
 **Explanation of metrics:**\
-Positive = 1 (upward move), Negative = 0 (downward move)\
+Negative = 0, Flat = 1, Positive = 2\
 Accuracy (0-100) => (Correct predictions / Total predictions) * 100%\
 F1 score (0-1) => Harmonic mean of Precision and Recall\
 F1 score (macro-averaged) => Unweighted mean of F1 score calculated for each class (1 and 0)\

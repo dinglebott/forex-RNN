@@ -5,17 +5,26 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from custom_modules.xgboost_trainer import xgbSignals
+import copy
 from sklearn.metrics import f1_score
 import os
 
 # GLOBAL VARIABLES
+yearNow = 2026
+instrument = "EUR_USD"
+granularity = "H4"
+# hyperparameters
 hiddenSize = 64
 numLayers = 2
 dropOut = 0.2
-learningRate = 0.001
 lookback = 20
-epochs = 60 # early stopping implemented
+optimiserName = "Adam"
+learningRate = 0.001
+weightDecay = 1e-5
 batchSize = 50
+clipGradNorm = 1.0
+# other
+epochs = 80 # early stopping implemented
 deadzone = 0.0015
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
@@ -28,7 +37,7 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # LOAD DATA
-df = dataparser.parseData("json_data/EUR_USD_H4_2010-01-01_2026-01-01.json")
+df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 16}-01-01_{yearNow}-01-01.json")
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
@@ -125,6 +134,8 @@ class ForexRNN(nn.Module):
         return finalOutput
 
 # INSTANTIATE MODEL
+torch.manual_seed(16) # ensure reproducible results
+np.random.seed(16)
 model = ForexRNN(
     input_size=features_train.shape[1],
     hidden_size=hiddenSize,
@@ -140,7 +151,8 @@ classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normal
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
 criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
-optimiser = torch.optim.Adam(model.parameters(), lr=learningRate)
+optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
+optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
@@ -161,6 +173,7 @@ for epoch in range(epochs):
         predictions = model(X_batch) # run the __call__ method which calls forward(X_batch)
         loss = criterion(predictions, y_batch) # evaluate loss, returns loss tensor (1 element: the average loss across the batch)
         loss.backward() # backpropagation, compute loss with respect to each parameter
+        nn.utils.clip_grad_norm_(model.parameters(), clipGradNorm) # prevent exploding gradients
         optimiser.step() # adjust gradients to minimise loss
         epochLoss += loss.item() # convert tensor to normal number and add to cumulative loss
     avgLoss = epochLoss / len(dataloader)
@@ -179,14 +192,15 @@ for epoch in range(epochs):
     if valLoss < bestValLoss:
         bestValLoss = valLoss
         badEpochs = 0
-        bestModelState = model.state_dict().copy()
+        bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
         badEpochs += 1
         if badEpochs >= 15:
             print("EARLY STOPPING NOW")
             break
 # restore best model
-model.load_state_dict(bestModelState)
+if bestModelState is not None:
+    model.load_state_dict(bestModelState)
 
 # TEST MODEL
 model.eval() # disable dropout
@@ -207,7 +221,7 @@ numFeatures = X_test.shape[2]
 print("Testing features...")
 for featureIdx in range(numFeatures):
     scores = []
-    for _ in range(20):
+    for _ in range(50):
         X_perm = X_test.clone()
         perm = torch.randperm(X_test.shape[0]) # get random permutation of integers from 0 to no. of samples
         X_perm[:, :, featureIdx] = X_perm[:, :, featureIdx][perm] # shuffle all values of this particular feature
