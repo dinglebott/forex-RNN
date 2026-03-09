@@ -60,7 +60,7 @@ labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
 
 # SPLIT DATA (remove 2025 test data)
-splitDate = "2025-01-01"
+splitDate = f"{yearNow - 1}-01-01"
 
 splitIdx = timestamps[timestamps > splitDate].index[0] # get index of first row after split date
 splitIdx = timestamps.index.get_loc(splitIdx) # realign indexes
@@ -84,10 +84,22 @@ def createSequences(fts, lbls, lookback):
         y.append(lbls[i + lookback])
     return np.array(X), np.array(y)
 
+# cache sequences to avoid rebuilding each trial (also converts to tensors)
+sequenceCache = {}
+def getSequences(fts, lbls, lookback, key): # key to differentiate train and test with same lookback
+    cacheKey = (lookback, key)
+    if cacheKey not in sequenceCache:
+        X, y = createSequences(fts, lbls, lookback)
+        sequenceCache[cacheKey] = (
+            torch.tensor(X, dtype=torch.float32, device=device),
+            torch.tensor(y, dtype=torch.long, device=device)
+        )
+    return sequenceCache[cacheKey]
+
 # TRAIN TEST SPLIT (created within objective)
 trainValSplit = TimeSeriesSplit(n_splits=3)
 
-# BUILD MODEL (instantiated withib objective)
+# BUILD MODEL (instantiated within objective)
 class ForexRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout, output_size):
         super(ForexRNN, self).__init__()
@@ -112,6 +124,23 @@ class ForexRNN(nn.Module):
         finalOutput = self.fc(lastTimestep) # map to prediction (batch_size, output size)
         return finalOutput
 
+# helper functions: predict in batches to prevent vram overflow
+def batchPredict(model, X, batchSize=1024):
+    allPreds = []
+    for i in range(0, len(X), batchSize):
+        batch = X[i : i + batchSize]
+        logits = model(batch) # raw output of model => tensor of shape (samples, 3)
+        preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+        allPreds.append(preds)
+    return np.concatenate(allPreds)
+def batchLoss(model, X, y, criterion, batchSize=1024):
+    totalLoss = 0
+    for i in range(0, len(X), batchSize):
+        Xb = X[i : i + batchSize]
+        yb = y[i : i + batchSize]
+        totalLoss += criterion(model(Xb), yb).item() * len(Xb) # criterion returns avg loss, multiply to get total
+    return totalLoss / len(X) # divide out to get overall avg loss
+
 # OPTUNA MAGIC
 def objective(trial):
     # PARAMS TO TUNE
@@ -120,27 +149,24 @@ def objective(trial):
         "num_layers": trial.suggest_int("num_layers", 1, 3)
     }
     dropout = trial.suggest_float("dropout", 0.1, 0.5) if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_int("lookback", 10, 60)
+    lookback = trial.suggest_categorical("lookback", [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60])
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
     learningRate = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     weightDecay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
     batchSize = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 0.5, 5.0)
 
-    # CREATE SEQUENCES
-    X_train, y_train = createSequences(features_train, labels_train, lookback=lookback)
-    X_test, y_test = createSequences(features_test, labels_test, lookback=lookback)
-
-    # CONVERT TO TENSORS
-    X_train = torch.tensor(X_train, dtype=torch.float32, device=device)
-    y_train = torch.tensor(y_train, dtype=torch.long, device=device)
-    X_test = torch.tensor(X_test, dtype=torch.float32, device=device)
-    y_test = torch.tensor(y_test, dtype=torch.long, device=device)
+    # CREATE SEQUENCES (already converted to tensors by function)
+    X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
+    X_test, y_test = getSequences(features_test, labels_test, lookback, key="test")
     # shape of X: (samples, timesteps, features)
     # shape of y: (samples, output_classes)
+    trainTrue = y_train.cpu().numpy() # transfer to cpu for f1 score later
+    testTrue = y_test.cpu().numpy()
 
     # SUBFOLD LOOP
     scores = []
+    trainScores = []
     for trainIdxs, valIdxs in trainValSplit.split(X_train):
         # SPLIT TRAIN AND VALIDATION SETS
         purgedTrainIndexes = trainIdxs[:-4] # prevent leaking from candlesAhead
@@ -171,14 +197,14 @@ def objective(trial):
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False,
-                                                 num_workers=2, pin_memory=True) # speed up cpu to gpu transfer
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
         # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
         # for early stopping
         bestValLoss = float("inf")
         badEpochs = 0
         bestModelState = None
+
         # training loop
         for _ in range(epochs):
             # train
@@ -194,8 +220,7 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLogits = model(X_fold_val) # raw output of model => tensor of shape (samples, 3)
-                valLoss = criterion(valLogits, y_fold_val).item()
+                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
 
             # check for early stopping
             if valLoss < bestValLoss:
@@ -213,21 +238,24 @@ def objective(trial):
         # TEST MODEL
         model.eval() # disable dropout
         with torch.no_grad(): # disable gradient tracking to save memory
-            testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
-            testProbs = torch.softmax(testLogits, dim=1) # convert to probabilities for each class (first dimension sums to 1)
-            testPreds = torch.argmax(testProbs, dim=1).cpu().numpy() # convert to predictions, shift to cpu
-            testTrue = y_test.cpu().numpy()
+            testPreds = batchPredict(model, X_test)
+            # predict on train set for overfitting check
+            trainPreds = batchPredict(model, X_train)
 
         # EVALUATE MODEL
         f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
         scores.append(f1Score)
+        trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
+        trainScores.append(trainF1Score)
     
+    # print train and test F1 for overfitting check
+    print(f"Trial {trial.number + 1} | Train F1: {np.mean(trainScores)} | Test F1: {np.mean(scores)}")
     # return score to study object
     return np.mean(scores)
 
 # study object (main optuna magic)
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=60, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # print and save study results
 print(study.best_params) # a python dict

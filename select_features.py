@@ -64,8 +64,8 @@ labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
 
 # SPLIT DATA
-splitDate = "2025-01-01"
-valSplitDate = "2024-01-01"
+splitDate = f"{yearNow - 1}-01-01"
+valSplitDate = f"{yearNow - 2}-01-01"
 
 splitIdx = timestamps[timestamps > splitDate].index[0] # get index of first row after split date
 splitIdx = timestamps.index.get_loc(splitIdx) # realign indexes
