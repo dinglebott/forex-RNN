@@ -6,16 +6,21 @@ Pulled from OANDA REST-v20 API, stored in JSON format\
 <br/>
 
 ## DATASETS
-**Feature selection ():**\
-
+**Feature selection (Permutation importance):**\
+Train: 2010-2023\
+Validate: 2024 (used for early stopping of epochs)\
+Test: 2025 (used to produce baseline F1 score, and for permuting)\
 **Hyperparameter tuning (Optuna):**\
-
+Train/Validate: 2010-2024 (split handled by TimeSeriesSplit cross-validation with 3 folds)\
+Test: 2025 (used to produce F1 score for Optuna to maximise)\
 **Final model training:**\
-Train: 2010-2024, Test: 2025\
+Train: 2010-2024\
+Test: 2025\
 <br/>
 
 ## INITIAL FEATURE ENGINEERING
-**Scoring metric:** Permutation importances: shuffle values of each feature and test for greatest impact on F1 score\
+**Scoring metric:** Permutation importances\
+Each feature is shuffled randomly across all the samples of the test set, effectively turning it into garbage data. The impact on the model's F1 score when predicting the test set is then measured. The process is repeated for every feature and the scores are compared.\
 **Price:**\
 Return => Percentage change from previous close\
 4-period return => Percentage change from close 4 candles prior\

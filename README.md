@@ -2,13 +2,15 @@
 Goal: Predict the direction of future price movements in forex markets by training a neural network\
 This is the next stage of the trading-trees project, which uses a tree-based model architecture\
 In this project I will integrate the model from trading-trees into a larger LSTM architecture\
-LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which performs well in time series like the forex market, due to its "memory" of previous time windows
+LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which performs well in time series like the forex market, due to its "memory" of previous time windows\
+*See DOCS.md for details on data collection, tuning, training, and testing methodology*
 
 ## Outline of methodology
 Phase 1: Fetch historical data => fetch_data.py\
 Phase 2: Feature engineering and selection => select_features.py\
 Phase 3: Tune hyperparameters (using features from Phase 2) => tune_params.py\
 Phase 4: Train final model and evaluate (using features and hyperparameters from Phases 2 and 3) => train_model.py
+*See DOCS.md for detailed testing methodology*
 
 ## Project structure
 The main code is all in the top-level scripts\
