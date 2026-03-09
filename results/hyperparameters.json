@@ -1,0 +1,11 @@
+{
+    "hidden_size": 256,
+    "num_layers": 3,
+    "dropout": 0.22699467761447353,
+    "lookback": 12,
+    "optimiser": "Adam",
+    "lr": 0.000109538591346308,
+    "weight_decay": 1.5971706176083515e-06,
+    "batch_size": 32,
+    "clip_grad_norm": 1.4861880667318133
+}

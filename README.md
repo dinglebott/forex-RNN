@@ -1,7 +1,7 @@
 ## About project
 Goal: Predict the direction of future price movements in forex markets by training a neural network\
-This is the next stage of the trading-trees project, which uses a tree-based model architecture\
-In this project I will integrate the model from trading-trees into a larger LSTM architecture\
+This is the next stage of the [trading-trees](https://github.com/dinglebott/trading-trees) project, which uses a tree-based model architecture\
+In this project I will integrate the model from [trading-trees](https://github.com/dinglebott/trading-trees) into a larger LSTM architecture\
 LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which performs well in time series like the forex market, due to its "memory" of previous time windows\
 *See DOCS.md for details on data collection, tuning, training, and testing methodology*
 
@@ -18,7 +18,7 @@ The custom_modules folder contains helper functions to fetch and manipulate the 
 
 ## How to build a model
 The top-level scripts contain global variables for the current year and the desired instrument and granularity. Set these to the appropriate values\
-For a model other than EUR_USD_H4_2026, first train an appropriate XGBoost model using the framework in trading-trees\
+For a model other than EUR_USD_H4_2026, first train an appropriate XGBoost model using the framework in [trading-trees](https://github.com/dinglebott/trading-trees)\
 Then paste the JSON file into the custom_modules folder, and edit the filepath accordingly in the xgboost_trainer.py module\
 In Phase 4, double-check the final features and hyperparameters in their respective JSON files (features.json and hyperparameters.json)\
 *Rename them with their version names once the model is trained to prevent future models overwriting them*\
