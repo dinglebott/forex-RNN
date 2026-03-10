@@ -107,6 +107,8 @@ y_val = torch.tensor(y_val, dtype=torch.long, device=device)
 y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 # shape of X: (samples, timesteps, features)
 # shape of y: (samples, output_classes)
+valTrue = y_val.cpu().numpy() # for f1 score later
+testTrue = y_test.cpu().numpy()
 
 # BUILD MODEL
 class ForexRNN(nn.Module):
@@ -145,8 +147,8 @@ model = ForexRNN(
 ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-classCounts = np.bincount(labels.values.astype(int)) # no. of each class
-classWeights = 1.0 / classCounts
+classCounts = np.bincount(labels_train.astype(int)) # no. of each class
+classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
 classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
@@ -159,9 +161,8 @@ dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
-valTrue = y_val.cpu().numpy() # move outside the loop
-# for early stopping
-bestValLoss = float("inf")
+# for early stopping and saving best model
+bestValF1 = 0
 badEpochs = 0
 bestModelState = None
 for epoch in range(epochs):
@@ -183,14 +184,13 @@ for epoch in range(epochs):
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valLoss = criterion(valLogits, y_val).item()
-        valProbs = torch.softmax(valLogits, dim=1) # convert to probabilities for each class (first dimension sums to 1)
-        valPreds = torch.argmax(valProbs, dim=1).cpu().numpy() # convert to predictions, shift to cpu   
+        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu   
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.5f} | Val loss: {valLoss:.5f} | Val F1: {valF1Score:.5f}")
 
     # check for early stopping
-    if valLoss < bestValLoss:
-        bestValLoss = valLoss
+    if valF1Score > bestValF1:
+        bestValF1 = valF1Score
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
@@ -206,10 +206,8 @@ if bestModelState is not None:
 model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
-    testProbs = torch.softmax(testLogits, dim=1) # convert to probabilities for each class (first dimension sums to 1)
-    testPreds = torch.argmax(testProbs, dim=1).cpu().numpy() # convert to predictions, shift to cpu
-    testTrue = y_test.cpu().numpy()
-
+    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+    
 # EVALUATE MODEL
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 

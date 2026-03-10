@@ -25,6 +25,7 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
                "normalised_ema15", "normalised_ema50", "ema_cross",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]
+prunedFeatures = ["xgb_0", "bb_position", "vol_ratio", "lower_wick", "vol_momentum"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -60,7 +61,7 @@ features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
 features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 # prune features
-features.drop(columns=["xgb_0", "bb_position", "vol_ratio", "lower_wick", "vol_momentum"], inplace=True)
+features.drop(columns=prunedFeatures, inplace=True)
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]

@@ -107,12 +107,12 @@ Recall (0-1) => Correctly predicted 1's / All real 1's\
 "weight_decay": 1.5e-5\
 "batch_size": 256\
 "clip_grad_norm": 5.1\
-**Accuracy:** \
-**F1 score (macro-averaged):** \
-**ROC-AUC score:** \
+**Accuracy:** 40.719%\
+**F1 score (macro-averaged):** 0.39607\
+**ROC-AUC score:** 0.57066\
 **Confusion matrix:**
 | &nbsp; | Pred - | Pred ~ | Pred + |
 | --- | --- | --- | --- |
-| Real - | 66 | 259 | 51 |
-| Real ~ | 92 | 543 | 87 |
-| Real + | 92 | 278 | 82 |
+| Real - | 117 | 154 | 195 |
+| Real ~ | 122 | 267 | 158 |
+| Real + | 110 | 168 | 239 |
