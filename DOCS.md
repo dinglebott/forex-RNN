@@ -18,7 +18,7 @@ Train: 2010-2024\
 Test: 2025\
 <br/>
 
-## INITIAL FEATURE ENGINEERING
+## FEATURE ENGINEERING
 **Scoring metric:** Permutation importances\
 Each feature is shuffled randomly across all the samples of the test set, effectively turning it into garbage data. The impact on the model's F1 score when predicting the test set is then measured. The process is repeated for every feature and the scores are compared.\
 **Price:**\
@@ -48,13 +48,31 @@ Volume momentum => vol_ratio - vol_ratio 5-period mean\
 **Mean reversion:**\
 Bollinger band position => (C - lowerband) / (upperband - lowerband)\
 **XGBoost signals:**\
-Probability of each class as predicted by an XGBoost model
+Probability of each class as predicted by an XGBoost model\
 <br/>
 
 ## HYPERPARAMETER TUNING
 **Scoring metric:** Macro-adjusted F1 score (see Explanation of metrics below)\
 **Hyperparameters tested:**\
-
+`hidden_size`: No. of neurons per layer\
+`num_layers`: No. of stacked LSTM layers\
+`dropout`: Fraction of neurons randomly deactivated for training\
+`lookback`: Length of lookback window\
+`optimiserName`: Type of optimiser used\
+`learningRate`: Rate of weight change\
+`weightDecay`: Regularisation, penalises large weights\
+`batchSize`: Size of batches loaded by dataloader\
+`clipGradNorm`: Clips gradients to prevent infinities\
+**Initial search spaces:**\
+`hidden_size`: [16, 32, 64, 128, 256, 512, 768]\
+`num_layers`: [1, 2, 3]\
+`dropout`: 0.1 - 0.5\
+`lookback`: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]\
+`optimiserName`: ["Adam", "RMSprop"]\
+`learningRate`: 1e-4 - 1e-2\
+`weightDecay`: 1e-6 - 1e-3\
+`batchSize`: [64, 128, 256, 512]\
+`clipGradNorm`: 2.0 - 8.0\
 <br/>
 
 ## MODEL EVALUATION
@@ -67,3 +85,28 @@ ROC-AUC score (0-1) => Probability that a randomly chosen 1 is ranked higher tha
 Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
+
+### Model 1
+**Target variable:** Net movement direction of next 4 candles (down/flat/up)\
+**Train:** 2010 - 2024\
+**Test:** 2025\
+**Features:** []\
+**Hyperparameters:**
+"hidden_size": 768\
+"num_layers": 2\
+"dropout": 0.18\
+"lookback": 20\
+"optimiser": "Adam"\
+"lr": 0.0005\
+"weight_decay": 1.5e-5\
+"batch_size": 256\
+"clip_grad_norm": 5.1\
+**Accuracy:** \
+**F1 score (macro-averaged):** \
+**ROC-AUC score:** \
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 66 | 259 | 51 |
+| Real ~ | 92 | 543 | 87 |
+| Real + | 92 | 278 | 82 |

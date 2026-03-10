@@ -14,15 +14,15 @@ yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
 # hyperparameters
-hiddenSize = 64
+hiddenSize = 768
 numLayers = 2
-dropOut = 0.2
+dropOut = 0.18
 lookback = 20
 optimiserName = "Adam"
-learningRate = 0.001
-weightDecay = 1e-5
-batchSize = 50
-clipGradNorm = 1.0
+learningRate = 5e-4
+weightDecay = 1.5e-5
+batchSize = 256
+clipGradNorm = 5.1
 # other
 epochs = 80 # early stopping implemented
 deadzone = 0.0015

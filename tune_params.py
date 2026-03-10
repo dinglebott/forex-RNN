@@ -32,6 +32,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # SUPPRESS OPTUNA LOGS (set to INFO for normal per-trial logs, or DEBUG for more logs)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+# ENSURE REPRODUCIBILITY
+torch.manual_seed(16)
+np.random.seed(16)
+
 # LOAD DATA
 df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 16}-01-01_{yearNow}-01-01.json")
 timestamps = df["time"] # separate timestamps to avoid scaling
@@ -48,13 +52,15 @@ df["target"] = np.select(conditions, choices, default=1) # if not up or down, re
 df.dropna(inplace=True)
 
 # SEPARATE FEATURES AND LABELS (input and output)
-labels = df["target"]
 features = df[featureList]
+labels = df["target"]
 
 # INTEGRATE XGBOOST SIGNALS
 features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
-featureList.extend(["xgb_0", "xgb_1", "xgb_2"])
 features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
+
+# prune features
+features.drop(columns=["xgb_0", "bb_position", "vol_ratio", "lower_wick", "vol_momentum"], inplace=True)
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
@@ -74,7 +80,7 @@ labels_test = labels.iloc[splitIdx:].values
 # SCALE FEATURES
 scaler = MinMaxScaler()
 features_train = scaler.fit_transform(features_train)
-features_test = scaler.transform(features_test)
+features_test = scaler.transform(features_test) # dont fit on test data
 
 # DATA SEQUENCES (created within objective)
 def createSequences(fts, lbls, lookback):
@@ -124,7 +130,7 @@ class ForexRNN(nn.Module):
         finalOutput = self.fc(lastTimestep) # map to prediction (batch_size, output size)
         return finalOutput
 
-# helper functions: predict in batches to prevent vram overflow
+# HELPER FUNCTIONS: predict in batches to prevent vram overflow
 def batchPredict(model, X, batchSize=1024):
     allPreds = []
     for i in range(0, len(X), batchSize):
@@ -145,24 +151,23 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128, 256]),
-        "num_layers": trial.suggest_int("num_layers", 1, 3)
+        "hidden_size": trial.suggest_categorical("hidden_size", [512, 768]),
+        "num_layers": 2
     }
-    dropout = trial.suggest_float("dropout", 0.1, 0.5) if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_categorical("lookback", [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60])
+    dropout = trial.suggest_float("dropout", 0.15, 0.45) if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
+    lookback = trial.suggest_int("lookback", 20, 25)
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 0.5, 5.0)
+    learningRate = trial.suggest_float("lr", 3e-4, 1e-3, log=True)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
+    batchSize = trial.suggest_categorical("batch_size", [256, 512])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
     X_test, y_test = getSequences(features_test, labels_test, lookback, key="test")
     # shape of X: (samples, timesteps, features)
     # shape of y: (samples, output_classes)
-    trainTrue = y_train.cpu().numpy() # transfer to cpu for f1 score later
-    testTrue = y_test.cpu().numpy()
+    testTrue = y_test.cpu().numpy() # transfer to cpu for F1 score later
 
     # SUBFOLD LOOP
     scores = []
@@ -174,10 +179,9 @@ def objective(trial):
         X_fold_val = X_train[valIdxs]
         y_fold_train = y_train[purgedTrainIndexes]
         y_fold_val = y_train[valIdxs]
+        foldTrainTrue = y_fold_train.cpu().numpy() # for F1 score later
 
         # INSTANTIATE MODEL
-        torch.manual_seed(16) # ensure reproducible results
-        np.random.seed(16)
         model = ForexRNN(
             **params,
             dropout=dropout,
@@ -187,7 +191,7 @@ def objective(trial):
 
         # LOSS FUNCTION AND OPTIMISER
         classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-        classWeights = 1.0 / classCounts
+        classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
         classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
         weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
@@ -239,25 +243,24 @@ def objective(trial):
         model.eval() # disable dropout
         with torch.no_grad(): # disable gradient tracking to save memory
             testPreds = batchPredict(model, X_test)
-            # predict on train set for overfitting check
-            trainPreds = batchPredict(model, X_train)
+            foldTrainPreds = batchPredict(model, X_fold_train) # check for overfitting
 
         # EVALUATE MODEL
         f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
         scores.append(f1Score)
-        trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
+        trainF1Score = f1_score(foldTrainTrue, foldTrainPreds, average="macro", zero_division=0)
         trainScores.append(trainF1Score)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number + 1} | Train F1: {np.mean(trainScores)} | Test F1: {np.mean(scores)}")
+    print(f"Trial {trial.number} | Train F1: {np.mean(trainScores):.5f} | Test F1: {np.mean(scores):.5f}")
     # return score to study object
     return np.mean(scores)
 
-# study object (main optuna magic)
+# MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=50, show_progress_bar=True)
 
-# print and save study results
+# PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
 directory = "results"
 if not os.path.exists(directory):
