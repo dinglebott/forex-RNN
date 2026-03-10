@@ -90,8 +90,14 @@ Recall (0-1) => Correctly predicted 1's / All real 1's\
 **Target variable:** Net movement direction of next 4 candles (down/flat/up)\
 **Train:** 2010 - 2024\
 **Test:** 2025\
-**Features:** []\
-**Hyperparameters:**
+**Features:** ["return", "return_4", "log_return", "log_return_4",\
+"atr_14", "volatility_regime",\
+"bb_width",\
+"hl_spread", "oc_spread", "upper_wick",\
+"normalised_ema15", "normalised_ema50", "ema_cross",\
+"rsi_14", "macd_hist",\
+"xgb_1", "xgb_2"]\
+**Hyperparameters:**\
 "hidden_size": 768\
 "num_layers": 2\
 "dropout": 0.18\
