@@ -63,6 +63,8 @@ Probability of each class as predicted by an XGBoost model\
 `weightDecay`: Regularisation, penalises large weights\
 `batchSize`: Size of batches loaded by dataloader\
 `clipGradNorm`: Clips gradients to prevent infinities\
+`num_filters`: No. of kernels applied by CNN\
+`kernel_size`: Size of pattern CNN recognises\
 **Initial search spaces:**\
 `hidden_size`: [16, 32, 64, 128, 256, 512, 768]\
 `num_layers`: [1, 2, 3]\
@@ -73,6 +75,8 @@ Probability of each class as predicted by an XGBoost model\
 `weightDecay`: 1e-6 - 1e-3\
 `batchSize`: [64, 128, 256, 512]\
 `clipGradNorm`: 2.0 - 8.0\
+`num_filters`: [16, 32, 64, 128, 512]\
+`kernel_size`: [3, 5, 7]\
 <br/>
 
 ## MODEL EVALUATION
@@ -90,32 +94,33 @@ Recall (0-1) => Correctly predicted 1's / All real 1's\
 *Changes from v1: Implemented learning rate scheduler, added CNN layers, expanded training data to start from 2005*\
 **Train:** 2005 - 2024\
 **Test:** 2025\
-**Features:** ["return", "return_4", "log_return", "log_return_4",\
-"atr_14", "volatility_regime",\
-"bb_width",\
-"hl_spread", "oc_spread", "upper_wick",\
-"normalised_ema15", "normalised_ema50", "ema_cross",\
-"rsi_14", "macd_hist",\
+**Features:** ["atr_14", "volatility_regime",\
+"bb_position",\
+"hl_spread", "upper_wick"\
+"normalised_ema50", "ema_cross",\
+"rsi_14", "macd_hist", "vol_ratio", "vol_momentum",\
 "xgb_1", "xgb_2"]\
 **Hyperparameters:**\
-"hidden_size": 768\
-"num_layers": 2\
-"dropout": 0.18\
-"lookback": 20\
-"optimiser": "Adam"\
-"lr": 0.0005\
-"weight_decay": 1.5e-5\
-"batch_size": 256\
-"clip_grad_norm": 5.1\
-**Accuracy:** 40.719%\
-**F1 score (macro-averaged):** 0.39607\
-**ROC-AUC score:** 0.57066\
+hidden_size: 128\
+num_layers: 2\
+dropout: 0.26\
+lookback: 20\
+optimiser: Adam\
+lr: 0.0004\
+weight_decay: 0.0006\
+batch_size: 1024\
+clip_grad_norm: 5.1\
+num_filters: 128\
+kernel_size: 5\
+**Accuracy:** 42.092%\
+**F1 score (macro-averaged):** 0.41553\
+**ROC-AUC score:** 0.58021\
 **Confusion matrix:**
 | &nbsp; | Pred - | Pred ~ | Pred + |
 | --- | --- | --- | --- |
-| Real - | 117 | 154 | 195 |
-| Real ~ | 122 | 267 | 158 |
-| Real + | 110 | 168 | 239 |
+| Real - | 166 | 167 | 133 |
+| Real ~ | 129 | 283 | 135 |
+| Real + | 152 | 170 | 195 |
 <br/>
 
 ### Model 1
@@ -130,15 +135,15 @@ Recall (0-1) => Correctly predicted 1's / All real 1's\
 "rsi_14", "macd_hist",\
 "xgb_1", "xgb_2"]\
 **Hyperparameters:**\
-"hidden_size": 768\
-"num_layers": 2\
-"dropout": 0.18\
-"lookback": 20\
-"optimiser": "Adam"\
-"lr": 0.0005\
-"weight_decay": 1.5e-5\
-"batch_size": 256\
-"clip_grad_norm": 5.1\
+hidden_size: 768\
+num_layers: 2\
+dropout: 0.18\
+lookback: 20\
+optimiser: Adam\
+lr: 0.0005\
+weight_decay: 1.5e-5\
+batch_size: 256\
+clip_grad_norm: 5.1\
 **Accuracy:** 40.719%\
 **F1 score (macro-averaged):** 0.39607\
 **ROC-AUC score:** 0.57066\

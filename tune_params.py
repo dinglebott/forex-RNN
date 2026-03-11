@@ -25,8 +25,14 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "bb_width", "bb_position",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
                "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]
-prunedFeatures = ["xgb_1", "bb_position", "upper_wick", "lower_wick"]
+               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
+               "open_return", "high_return", "low_return", "close_return"]
+prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
+               "atr_14", "volatility_regime",
+               "bb_width", "bb_position",
+               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+               "normalised_ema15", "normalised_ema50", "ema_cross",
+               "rsi_14", "macd_hist", "vol_momentum", "xgb_0"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,7 +68,7 @@ features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
 features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 # prune features
-features.drop(columns=prunedFeatures, inplace=True)
+features.drop(columns=prunedFeatures, inplace=True) # !!! featureList remains outdated but is not used later
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
@@ -193,20 +199,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256, 512]),
-        "num_layers": trial.suggest_int("num_layers", 2, 3)
+        "hidden_size": trial.suggest_categorical("hidden_size", [512, 768, 1024, 1536]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
     }
     dropout = trial.suggest_float("dropout", 0.15, 0.35) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_categorical("lookback", [10, 15, 20, 25, 30, 35, 40])
+    lookback = trial.suggest_categorical("lookback", [30, 35, 40, 45, 50, 55, 60])
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 8e-5, 4e-4, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [512, 1024, 2048])
+    learningRate = trial.suggest_float("lr", 5e-5, 1e-3, log=True)
+    weightDecay = trial.suggest_float("weight_decay", 5e-5, 5e-4)
+    batchSize = trial.suggest_categorical("batch_size", [256, 512, 1024, 1536, 2048])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [64, 128])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
+        numFilters = trial.suggest_categorical("num_filters", [32, 64, 128, 256])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -323,7 +329,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=150, show_progress_bar=True)
+study.optimize(objective, n_trials=80, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

@@ -15,18 +15,18 @@ instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 64 # no. of neurons in hidden state
-numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.3 # equivalent of subsample for RNN
+hiddenSize = 128 # no. of neurons in hidden state
+numLayers = 2 # no. of layers in the LSTM
+dropOut = 0.25 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 3e-5
-weightDecay = 1.5e-4
-batchSize = 256
+learningRate = 1.5e-4
+weightDecay = 5e-4
+batchSize = 1024
 clipGradNorm = 5.1
 # CNN params
 numFilters = 64
-kernelSize = 3
+kernelSize = 5
 # other
 epochs = 80 # early stopping implemented
 deadzone = 0.0015
@@ -35,10 +35,15 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "bb_width", "bb_position",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
                "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]
+               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
+               "open_return", "high_return", "low_return", "close_return"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# ENSURE REPRODUCIBILITY
+torch.manual_seed(16) # ensure reproducible results
+np.random.seed(16)
 
 # LOAD DATA
 df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
@@ -180,8 +185,6 @@ class ForexHybrid(nn.Module):
         return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # INSTANTIATE MODEL
-torch.manual_seed(42) # ensure reproducible results
-np.random.seed(42)
 match arch:
     case 0:
         model = ForexRNN(
@@ -255,7 +258,7 @@ for epoch in range(epochs):
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
         badEpochs += 1
-        if badEpochs >= 15:
+        if badEpochs >= 20:
             print("EARLY STOPPING NOW")
             break
     

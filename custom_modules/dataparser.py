@@ -28,6 +28,11 @@ def parseData(jsonPath):
     # helper
     def getEma(period):
         return df["close"].ewm(span=period, adjust=False).mean()
+    # Raw
+    df["open_return"] = (df["open"] / df["close"].shift(1)) - 1
+    df["high_return"] = (df["high"] / df["close"].shift(1)) - 1
+    df["low_return"] = (df["low"] / df["close"].shift(1)) - 1
+    df["close_return"] = (df["close"] / df["close"].shift(1)) - 1
     # Returns
     df["return"] = df["close"].pct_change()
     df["return_4"] = df["close"].pct_change(4)
