@@ -28,11 +28,11 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
                "open_return", "high_return", "low_return", "close_return"]
 prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
-               "volatility_regime",
-               "bb_width",
-               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-               "normalised_ema15", "normalised_ema50",
-               "macd_hist", "vol_momentum", "xgb_0"]
+                  "volatility_regime",
+                  "bb_width",
+                  "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+                  "normalised_ema15", "normalised_ema50",
+                  "macd_hist", "vol_momentum", "xgb_0"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -290,8 +290,7 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLogits = model(X_fold_val) # raw output of model => tensor of shape (samples, 3)
-                valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+                valPreds = batchPredict(model, X_fold_val)
             valF1Score = f1_score(foldValTrue, valPreds, average="macro", zero_division=0)
 
             # check for early stopping
