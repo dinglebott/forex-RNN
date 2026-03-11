@@ -28,11 +28,11 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
                "open_return", "high_return", "low_return", "close_return"]
 prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
-               "atr_14", "volatility_regime",
-               "bb_width", "bb_position",
+               "volatility_regime",
+               "bb_width",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-               "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_momentum", "xgb_0"]
+               "normalised_ema15", "normalised_ema50",
+               "macd_hist", "vol_momentum", "xgb_0"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
