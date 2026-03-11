@@ -14,9 +14,9 @@ yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
 # hyperparameters
-hiddenSize = 768
-numLayers = 2
-dropOut = 0.18
+hiddenSize = 768 # no. of neurons in hidden state
+numLayers = 2 # no. of layers in the LSTM
+dropOut = 0.18 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
 learningRate = 5e-4
@@ -121,10 +121,10 @@ class ForexRNN(nn.Module):
         # LSTM layer: takes 3D tensor as input (batch_size, timesteps, features)
         self.lstm = nn.LSTM(
             input_size=input_size, # no. of features per datapoint
-            hidden_size=hidden_size, # no. of neurons in hidden state
-            num_layers=num_layers, # no. of layers in the LSTM
+            hidden_size=hidden_size,
+            num_layers=num_layers,
             batch_first=True, # set batch size as first dimension of input tensor
-            dropout=dropout # equivalent of subsample for RNN
+            dropout=dropout
         )
         # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
         self.fc = nn.Linear(hidden_size, output_size)
@@ -187,12 +187,11 @@ for epoch in range(epochs):
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
-        valLoss = criterion(valLogits, y_val).item()
         valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu   
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
 
     # check for early stopping
-    if valF1Score > bestValF1:
+    if valF1Score >= bestValF1:
         bestValF1 = valF1Score
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors

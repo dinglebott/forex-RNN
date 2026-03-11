@@ -1,17 +1,17 @@
 ## RAW DATA COLLECTION
 Instrument: EUR_USD at 4-hourly timeframe\
 Candle data: OHLCV (open, high, low, close, volume)\
-Time period: 2010-01-01 to 2026-01-01\
+Time period: 2005-01-01 to 2026-01-01\
 Pulled from OANDA REST-v20 API, stored in JSON format\
 <br/>
 
 ## DATASETS
 **Feature selection (Permutation importance):**\
-Train: 2010-2023\
+Train: 2005-2023\
 Validate: 2024 (used for early stopping of epochs)\
 Test: 2025 (used to produce baseline F1 score, and for permuting)\
 **Hyperparameter tuning (Optuna):**\
-Train/Validate: 2010-2024 (split handled by TimeSeriesSplit cross-validation with 3 folds)\
+Train/Validate: 2005-2024 (split handled by TimeSeriesSplit cross-validation with 3 folds)\
 Test: 2025 (used to produce F1 score for Optuna to maximise)\
 **Final model training:**\
 Train: 2010-2024\
@@ -84,6 +84,38 @@ F1 score (macro-averaged) => Unweighted mean of F1 score calculated for each cla
 ROC-AUC score (0-1) => Probability that a randomly chosen 1 is ranked higher than a randomly chosen 0 by the model\
 Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
+<br/>
+
+### Model 2
+*Changes from v1: Implemented learning rate scheduler, added CNN layers, expanded training data to start from 2005*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["return", "return_4", "log_return", "log_return_4",\
+"atr_14", "volatility_regime",\
+"bb_width",\
+"hl_spread", "oc_spread", "upper_wick",\
+"normalised_ema15", "normalised_ema50", "ema_cross",\
+"rsi_14", "macd_hist",\
+"xgb_1", "xgb_2"]\
+**Hyperparameters:**\
+"hidden_size": 768\
+"num_layers": 2\
+"dropout": 0.18\
+"lookback": 20\
+"optimiser": "Adam"\
+"lr": 0.0005\
+"weight_decay": 1.5e-5\
+"batch_size": 256\
+"clip_grad_norm": 5.1\
+**Accuracy:** 40.719%\
+**F1 score (macro-averaged):** 0.39607\
+**ROC-AUC score:** 0.57066\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 117 | 154 | 195 |
+| Real ~ | 122 | 267 | 158 |
+| Real + | 110 | 168 | 239 |
 <br/>
 
 ### Model 1

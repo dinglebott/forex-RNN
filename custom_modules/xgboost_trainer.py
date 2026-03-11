@@ -6,8 +6,9 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+yearNow = 2026
 # LOAD DATA
-df = dataparser.parseData("json_data/EUR_USD_H4_2010-01-01_2026-01-01.json")
+df = dataparser.parseData(f"json_data/EUR_USD_H4_{yearNow - 21}-01-01_{yearNow}-01-01.json")
 trainedXgbFilepath = "custom_modules/XGBoost_EUR_USD_H4_2026_v6.json"
 
 # FEATURES AND HYPERPARAMETERS (obtained from trading-trees project)
@@ -34,12 +35,12 @@ df["target"] = np.select(conditions, choices, default=1) # if not up or down, re
 df.dropna(inplace=True)
 
 # SPLIT DATA
-warmupFold = dataparser.splitByDate(df, datetime(2010, 1, 1), datetime(2010, 6, 1))
-warmupFold2 = dataparser.splitByDate(df, datetime(2010, 6, 1), datetime(2011, 1, 1))
-fold1 = dataparser.splitByDate(df, datetime(2011, 1, 1), datetime(2014, 1, 1))
-fold2 = dataparser.splitByDate(df, datetime(2014, 1, 1), datetime(2018, 1, 1))
-fold3 = dataparser.splitByDate(df, datetime(2018, 1, 1), datetime(2022, 1, 1))
-fold4 = dataparser.splitByDate(df, datetime(2022, 1, 1), datetime(2025, 1, 1))
+warmupFold = dataparser.splitByDate(df, datetime(2005, 1, 1), datetime(2005, 6, 1))
+warmupFold2 = dataparser.splitByDate(df, datetime(2005, 6, 1), datetime(2006, 1, 1))
+fold1 = dataparser.splitByDate(df, datetime(2006, 1, 1), datetime(2011, 1, 1))
+fold2 = dataparser.splitByDate(df, datetime(2011, 1, 1), datetime(2016, 1, 1))
+fold3 = dataparser.splitByDate(df, datetime(2016, 1, 1), datetime(2021, 1, 1))
+fold4 = dataparser.splitByDate(df, datetime(2021, 1, 1), datetime(2025, 1, 1))
 testFold = dataparser.splitByDate(df, datetime(2025, 1, 1), datetime(2026, 1, 1))
 
 # DEFINE DATASETS

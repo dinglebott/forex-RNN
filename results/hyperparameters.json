@@ -1,10 +1,13 @@
 {
-    "hidden_size": 768,
-    "dropout": 0.16320304045195633,
+    "hidden_size": 128,
+    "num_layers": 3,
+    "dropout": 0.22793659973061373,
     "lookback": 20,
     "optimiser": "Adam",
-    "lr": 0.0004838043314579768,
-    "weight_decay": 1.1393987491238063e-05,
-    "batch_size": 256,
-    "clip_grad_norm": 5.085775339525905
+    "lr": 0.00018403515703474158,
+    "weight_decay": 0.0006371271537588467,
+    "batch_size": 1024,
+    "clip_grad_norm": 4.952797223827505,
+    "num_filters": 64,
+    "kernel_size": 5
 }

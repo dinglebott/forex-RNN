@@ -16,8 +16,9 @@ import json
 yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
+arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # other
-epochs = 50 # early stopping implemented
+epochs = 80 # early stopping implemented
 deadzone = 0.0015
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
@@ -25,7 +26,7 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
                "normalised_ema15", "normalised_ema50", "ema_cross",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]
-prunedFeatures = ["xgb_0", "bb_position", "vol_ratio", "lower_wick", "vol_momentum"]
+prunedFeatures = ["xgb_1", "bb_position", "upper_wick", "lower_wick"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,7 +39,7 @@ torch.manual_seed(16)
 np.random.seed(16)
 
 # LOAD DATA
-df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 16}-01-01_{yearNow}-01-01.json")
+df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
@@ -66,7 +67,7 @@ features.drop(columns=prunedFeatures, inplace=True)
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
 
-# SPLIT DATA (remove 2025 test data)
+# SPLIT DATA
 splitDate = f"{yearNow - 1}-01-01"
 
 splitIdx = timestamps[timestamps > splitDate].index[0] # get index of first row after split date
@@ -116,7 +117,7 @@ class ForexRNN(nn.Module):
             hidden_size=hidden_size, # no. of neurons in hidden state
             num_layers=num_layers, # no. of layers in the LSTM
             batch_first=True, # set batch size as first dimension of input tensor
-            dropout=dropout # equivalent of subsample for RNN
+            dropout=dropout if num_layers > 1 else 0 # equivalent of subsample for RNN
         )
         # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
         self.fc = nn.Linear(hidden_size, output_size)
@@ -128,8 +129,48 @@ class ForexRNN(nn.Module):
         # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
         # cell: similar to hidden but contains cell state instead of hidden state
         lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
-        finalOutput = self.fc(lastTimestep) # map to prediction (batch_size, output size)
-        return finalOutput
+        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
+
+class ForexHybrid(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout, lstm_dropout, output_size,
+                 num_filters, kernel_size):
+        super(ForexHybrid, self).__init__()
+        # CNN layers: takes 3D tensor as input (batch_size, channels, length)
+        self.cnn = nn.Sequential(
+            nn.Conv1d(in_channels=input_size, out_channels=num_filters,
+                      kernel_size=kernel_size, padding=kernel_size//2),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=num_filters, out_channels=num_filters,
+                        kernel_size=kernel_size, padding=kernel_size//2),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_filters), # normalise before passing to LSTM
+            nn.Dropout(dropout)
+        )
+        # LSTM layers
+        self.lstm = nn.LSTM(
+            input_size=num_filters, # takes CNN output
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=lstm_dropout if num_layers > 1 else 0
+        )
+        # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
+        self.fc = nn.Linear(hidden_size, output_size)
+    
+    def forward(self, x):
+        # x is 3D tensor (batch_size, timesteps, features)
+        # CNN
+        x = x.permute(0, 2, 1) # (batch, features, timesteps)
+        x = self.cnn(x)
+        x = x.permute(0, 2, 1) # (batch, timesteps, num_filters)
+        # LSTM
+        lstmOutput, (hidden, cell) = self.lstm(x)
+        # lstmOutput: hidden state of EVERY timestep for the LAST layer only (batch_size, timesteps, hidden_size)
+        # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
+        # cell: similar to hidden but contains cell state instead of hidden state
+        # FC
+        lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
+        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # HELPER FUNCTIONS: predict in batches to prevent vram overflow
 def batchPredict(model, X, batchSize=1024):
@@ -152,16 +193,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [512, 768]),
-        "num_layers": 2
+        "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256, 512]),
+        "num_layers": trial.suggest_int("num_layers", 2, 3)
     }
-    dropout = trial.suggest_float("dropout", 0.15, 0.45) if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_int("lookback", 20, 25)
+    dropout = trial.suggest_float("dropout", 0.15, 0.35) # for CNN
+    lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
+    lookback = trial.suggest_categorical("lookback", [10, 15, 20, 25, 30, 35, 40])
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 3e-4, 1e-3, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [256, 512])
+    learningRate = trial.suggest_float("lr", 8e-5, 4e-4, log=True)
+    weightDecay = trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True)
+    batchSize = trial.suggest_categorical("batch_size", [512, 1024, 2048])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
+    if arch == 1:
+        numFilters = trial.suggest_categorical("num_filters", [64, 128])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -181,14 +226,27 @@ def objective(trial):
         y_fold_train = y_train[purgedTrainIndexes]
         y_fold_val = y_train[valIdxs]
         foldTrainTrue = y_fold_train.cpu().numpy() # for F1 score later
+        foldValTrue = y_fold_val.cpu().numpy()
 
         # INSTANTIATE MODEL
-        model = ForexRNN(
-            **params,
-            dropout=dropout,
-            input_size=features.shape[1],
-            output_size=3
-        ).to(device)
+        match arch:
+            case 0:
+                model = ForexRNN(
+                    **params,
+                    dropout=dropout,
+                    input_size=features.shape[1],
+                    output_size=3
+                ).to(device)
+            case 1:
+                model = ForexHybrid(
+                    **params,
+                    dropout=dropout,
+                    lstm_dropout=lstmDropout,
+                    input_size=features.shape[1],
+                    output_size=3,
+                    num_filters=numFilters,
+                    kernel_size=kernelSize
+                ).to(device)
 
         # LOSS FUNCTION AND OPTIMISER
         classCounts = np.bincount(labels_train.astype(int)) # no. of each class
@@ -199,6 +257,7 @@ def objective(trial):
         criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
         optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
         optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned
@@ -206,7 +265,7 @@ def objective(trial):
         # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
         # for early stopping
-        bestValLoss = float("inf")
+        bestValF1 = 0
         badEpochs = 0
         bestModelState = None
 
@@ -225,17 +284,22 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
+                valLogits = model(X_fold_val) # raw output of model => tensor of shape (samples, 3)
+                valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+            valF1Score = f1_score(foldValTrue, valPreds, average="macro", zero_division=0)
 
             # check for early stopping
-            if valLoss < bestValLoss:
-                bestValLoss = valLoss
+            if valF1Score >= bestValF1:
+                bestValF1 = valF1Score
                 badEpochs = 0
                 bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
             else:
                 badEpochs += 1
                 if badEpochs >= 15:
                     break
+            
+            # tune learning rate down if plateauing
+            scheduler.step(valF1Score)
         # restore best model
         if bestModelState is not None:
             model.load_state_dict(bestModelState)
@@ -259,7 +323,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=50, show_progress_bar=True)
+study.optimize(objective, n_trials=150, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

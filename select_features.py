@@ -13,16 +13,20 @@ import os
 yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
+arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 768
-numLayers = 2
-dropOut = 0.18
+hiddenSize = 64 # no. of neurons in hidden state
+numLayers = 1 # no. of layers in the LSTM
+dropOut = 0.3 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 5e-4
-weightDecay = 1.5e-5
+learningRate = 3e-5
+weightDecay = 1.5e-4
 batchSize = 256
 clipGradNorm = 5.1
+# CNN params
+numFilters = 64
+kernelSize = 3
 # other
 epochs = 80 # early stopping implemented
 deadzone = 0.0015
@@ -37,7 +41,7 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # LOAD DATA
-df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 16}-01-01_{yearNow}-01-01.json")
+df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
@@ -110,17 +114,17 @@ y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 valTrue = y_val.cpu().numpy() # for f1 score later
 testTrue = y_test.cpu().numpy()
 
-# BUILD MODEL
+# BUILD MODELS
 class ForexRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout, output_size):
         super(ForexRNN, self).__init__()
         # LSTM layer: takes 3D tensor as input (batch_size, timesteps, features)
         self.lstm = nn.LSTM(
             input_size=input_size, # no. of features per datapoint
-            hidden_size=hidden_size, # no. of neurons in hidden state
-            num_layers=num_layers, # no. of layers in the LSTM
+            hidden_size=hidden_size,
+            num_layers=num_layers,
             batch_first=True, # set batch size as first dimension of input tensor
-            dropout=dropout # equivalent of subsample for RNN
+            dropout=dropout if num_layers > 1 else 0
         )
         # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
         self.fc = nn.Linear(hidden_size, output_size)
@@ -132,19 +136,72 @@ class ForexRNN(nn.Module):
         # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
         # cell: similar to hidden but contains cell state instead of hidden state
         lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
-        finalOutput = self.fc(lastTimestep) # map to prediction (batch_size, output size)
-        return finalOutput
+        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
+
+class ForexHybrid(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout, lstm_dropout, output_size,
+                 num_filters, kernel_size):
+        super(ForexHybrid, self).__init__()
+        # CNN layers: takes 3D tensor as input (batch_size, channels, length)
+        self.cnn = nn.Sequential(
+            nn.Conv1d(in_channels=input_size, out_channels=num_filters,
+                      kernel_size=kernel_size, padding=kernel_size//2),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=num_filters, out_channels=num_filters,
+                        kernel_size=kernel_size, padding=kernel_size//2),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_filters), # normalise before passing to LSTM
+            nn.Dropout(dropout)
+        )
+        # LSTM layers
+        self.lstm = nn.LSTM(
+            input_size=num_filters, # takes CNN output
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=lstm_dropout if num_layers > 1 else 0
+        )
+        # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
+        self.fc = nn.Linear(hidden_size, output_size)
+    
+    def forward(self, x):
+        # x is 3D tensor (batch_size, timesteps, features)
+        # CNN
+        x = x.permute(0, 2, 1) # (batch, features, timesteps)
+        x = self.cnn(x)
+        x = x.permute(0, 2, 1) # (batch, timesteps, num_filters)
+        # LSTM
+        lstmOutput, (hidden, cell) = self.lstm(x)
+        # lstmOutput: hidden state of EVERY timestep for the LAST layer only (batch_size, timesteps, hidden_size)
+        # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
+        # cell: similar to hidden but contains cell state instead of hidden state
+        # FC
+        lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
+        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # INSTANTIATE MODEL
-torch.manual_seed(16) # ensure reproducible results
-np.random.seed(16)
-model = ForexRNN(
-    input_size=features_train.shape[1],
-    hidden_size=hiddenSize,
-    num_layers=numLayers,
-    dropout=dropOut,
-    output_size=3
-).to(device)
+torch.manual_seed(42) # ensure reproducible results
+np.random.seed(42)
+match arch:
+    case 0:
+        model = ForexRNN(
+            input_size=features_train.shape[1],
+            hidden_size=hiddenSize,
+            num_layers=numLayers,
+            dropout=dropOut,
+            output_size=3
+        ).to(device)
+    case 1:
+        model = ForexHybrid(
+            input_size=features_train.shape[1],
+            hidden_size=hiddenSize,
+            num_layers=numLayers,
+            dropout=dropOut,
+            lstm_dropout=dropOut,
+            output_size=3,
+            num_filters=numFilters,
+            kernel_size=kernelSize
+        ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
 classCounts = np.bincount(labels_train.astype(int)) # no. of each class
@@ -155,6 +212,7 @@ weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) #
 criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
 optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
@@ -165,6 +223,8 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 bestValF1 = 0
 badEpochs = 0
 bestModelState = None
+
+# training loop
 for epoch in range(epochs):
     # train
     model.train() # set model to training mode
@@ -184,12 +244,12 @@ for epoch in range(epochs):
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valLoss = criterion(valLogits, y_val).item()
-        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu   
+        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.5f} | Val loss: {valLoss:.5f} | Val F1: {valF1Score:.5f}")
 
     # check for early stopping
-    if valF1Score > bestValF1:
+    if valF1Score >= bestValF1:
         bestValF1 = valF1Score
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
@@ -198,6 +258,9 @@ for epoch in range(epochs):
         if badEpochs >= 15:
             print("EARLY STOPPING NOW")
             break
+    
+    # tune learning rate down if plateauing
+    scheduler.step(valF1Score)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)

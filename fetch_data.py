@@ -6,4 +6,4 @@ yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
 
-datafetcher.getDataLoop(datetime(yearNow - 16, 1, 1), datetime(yearNow, 1, 1), instrument, granularity)
+datafetcher.getDataLoop(datetime(yearNow - 21, 1, 1), datetime(yearNow, 1, 1), instrument, granularity)
