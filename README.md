@@ -23,8 +23,7 @@ It also contains a fully-trained XGBoost model and a script to produce leak-free
 The top-level scripts contain global variables for the current year, the desired instrument, and granularity. I built my model for 2026 EUR/USD at H4 granularity. For other options, set these to the appropriate values.\
 If training a different model, first train an appropriate XGBoost model using the framework in [trading-trees](https://github.com/dinglebott/trading-trees).\
 Then paste the JSON file into the `custom_modules` folder, and edit the filepath accordingly in the `trainedXgbFilepath` variable at the top of the `xgboost_trainer.py` module.\
-In Phase 4, double-check the final features and hyperparameters in their respective JSON files (`features.json` and `hyperparameters.json`).\
-*Rename them with their version names once the model is trained to prevent future models overwriting them*\
+Once the model is trained, manually write the `features_vX.json` and `hyperparameters_vX.json` to the models folder (i will automate it when i'm not lazy one day).\
 Output for all phases is printed to the terminal, and the final model is automatically saved as a JSON file.
 #### IMPORTANT:
 You need an OANDA API key to pull historical data (or you can use the data I pulled already).\
