@@ -6,11 +6,29 @@ import json
 import pandas as pd
 import numpy as np
 import pywt
+from pykalman import KalmanFilter
 
 def denoise(series, wavelet='db4', level=3):
-        coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
-        coeffs[1] = np.zeros_like(coeffs[1])  # zero the highest-frequency components (noise)
-        return pywt.waverec(coeffs, wavelet) # reconstruct series with noise removed
+    coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
+    coeffs[1] = np.zeros_like(coeffs[1])  # zero the highest-frequency components (noise)
+    return pywt.waverec(coeffs, wavelet) # reconstruct series with noise removed
+
+def causalDenoise(series, wavelet='db4', level=4, min_length=40):
+    result = series.copy()
+    for i in range(min_length, len(series)):
+        window = series[:i+1].copy()
+        coeffs = pywt.wavedec(window, wavelet, level=level)
+        coeffs[1] = np.zeros_like(coeffs[1])
+        result[i] = pywt.waverec(coeffs, wavelet)[-1] # reconstruct series, grab last element
+    return result
+
+def kalmanDenoise(series):
+    kf = KalmanFilter(transition_matrices=[1], observation_matrices=[1],
+                      initial_state_mean=series[0],
+                      n_dim_obs=1)
+    kf = kf.em(series, n_iter=10)
+    stateMeans, _ = kf.filter(series)
+    return stateMeans.flatten()
 
 def parseData(jsonPath):
     # deserialise json data
@@ -32,10 +50,10 @@ def parseData(jsonPath):
     df = pd.DataFrame(records)
 
     # denoise
-    df["open"] = denoise(df["open"].values.copy())[:len(df)]
-    df["high"] = denoise(df["high"].values.copy())[:len(df)]
-    df["low"] = denoise(df["low"].values.copy())[:len(df)]
-    df["close"] = denoise(df["close"].values.copy())[:len(df)]
+    df["open"] = kalmanDenoise(df["open"].values.copy())[:len(df)]
+    df["high"] = kalmanDenoise(df["high"].values.copy())[:len(df)]
+    df["low"] = kalmanDenoise(df["low"].values.copy())[:len(df)]
+    df["close"] = kalmanDenoise(df["close"].values.copy())[:len(df)]
 
     # ADD FEATURES
     # helper
