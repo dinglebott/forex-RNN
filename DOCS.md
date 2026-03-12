@@ -91,7 +91,7 @@ Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
 ### Model 3
-*Changes from v2: Implement wavelet de-noising and minimum probability threshold for flat class*\
+*Changes from v2: Implement wavelet de-noising, minimum probability threshold for flat class, and class weighting*\
 **Train:** 2005 - 2024\
 **Test:** 2025\
 **Features:** ["atr_14",\
@@ -111,15 +111,15 @@ batch_size: 1024\
 clip_grad_norm: 5.1\
 num_filters: 128\
 kernel_size: 5\
-**Accuracy:** 44.771%\
-**F1 score (macro-averaged):** 0.45008\
-**ROC-AUC score:** 0.63238\
+**Accuracy:** 46.601%\
+**F1 score (macro-averaged):** 0.46928\
+**ROC-AUC score:** 0.64912\
 **Confusion matrix:**
 | &nbsp; | Pred - | Pred ~ | Pred + |
 | --- | --- | --- | --- |
-| Real - | 250 | 123 | 73 |
-| Real ~ | 246 | 205 | 141 |
-| Real + | 100 | 162 | 230 |
+| Real - | 251 | 133 | 62 |
+| Real ~ | 216 | 235 | 141 |
+| Real + | 84 | 181 | 227 |
 <br/>
 
 ### Model 2

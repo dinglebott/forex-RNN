@@ -214,7 +214,7 @@ classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and
 classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
-criterion = nn.CrossEntropyLoss() # function to minimise
+criterion = nn.CrossEntropyLoss(weightsTensor) # function to minimise
 optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
@@ -225,7 +225,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for setting minimum probability threshold for a flat prediction
-def predictByThreshold(probs, threshold=0.36):
+def predictByThreshold(probs, threshold=0.35):
     preds = []
     for p in probs:
         if p[1] > max(threshold, p[0], p[2]):
