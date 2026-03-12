@@ -1,0 +1,11 @@
+{
+    "modelParams": {
+        "hidden_size": 128,
+        "num_layers": 2,
+        "dropout": 0.26,
+        "num_filters": 128,
+        "kernel_size": 5
+    },
+
+    "lookback": 20
+}

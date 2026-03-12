@@ -1,10 +1,10 @@
 from custom_modules import dataparser
 import torch
 import torch.nn as nn
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from custom_modules.xgboost_trainer import xgbSignals
 import copy
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 import os
@@ -301,3 +301,8 @@ filename = f"NN_{instrument}_{granularity}_{yearNow}.pth"
 filepath = os.path.join(directory, filename)
 torch.save(model.state_dict(), filepath)
 print("\nModel saved to: " + filename)
+
+# SAVE SCALER
+filename = f"scaler.pkl"
+filepath = os.path.join(directory, filename)
+joblib.dump(scaler, filepath)

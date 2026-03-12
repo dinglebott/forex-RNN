@@ -105,7 +105,7 @@ num_layers: 2\
 dropout: 0.26\
 lookback: 20\
 optimiser: Adam\
-lr: 0.003\
+lr: 0.001\
 weight_decay: 0.0006\
 batch_size: 1024\
 clip_grad_norm: 5.1\

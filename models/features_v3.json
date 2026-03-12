@@ -1,0 +1,9 @@
+{
+    "features": [
+        "atr_14",
+        "bb_width", "bb_position",
+        "hl_spread", "lower_wick",
+        "normalised_ema15", "normalised_ema50", "ema_cross",
+        "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
+    ]
+}
