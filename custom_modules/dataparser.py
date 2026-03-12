@@ -1,9 +1,16 @@
 # EXPORTS:
 # parseData() adds features and returns DataFrame
 # splitByDate() returns specified slice of DataFrame by date
+# denoise() performs wavelet deconstruction to remove noise (hopefully)
 import json
 import pandas as pd
 import numpy as np
+import pywt
+
+def denoise(series, wavelet='db4', level=3):
+        coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
+        coeffs[1] = np.zeros_like(coeffs[1])  # zero the highest-frequency components (noise)
+        return pywt.waverec(coeffs, wavelet) # reconstruct series with noise removed
 
 def parseData(jsonPath):
     # deserialise json data
@@ -23,6 +30,12 @@ def parseData(jsonPath):
                 "volume": c["volume"]
             })
     df = pd.DataFrame(records)
+
+    # denoise
+    df["open"] = denoise(df["open"].values.copy())[:len(df)]
+    df["high"] = denoise(df["high"].values.copy())[:len(df)]
+    df["low"] = denoise(df["low"].values.copy())[:len(df)]
+    df["close"] = denoise(df["close"].values.copy())[:len(df)]
 
     # ADD FEATURES
     # helper

@@ -20,7 +20,7 @@ numLayers = 2 # no. of layers in the LSTM
 dropOut = 0.26 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 1e-4
+learningRate = 1e-3
 weightDecay = 6e-4
 batchSize = 1024
 clipGradNorm = 5.1
@@ -37,7 +37,10 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "normalised_ema15", "normalised_ema50", "ema_cross",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
                "open_return", "high_return", "low_return", "close_return"]
-prunedFeatures = ["log_return", "bb_width", "normalised_ema15", "return", "log_return_4", "return_4", "xgb_0", "lower_wick", "oc_spread"]
+prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
+               "volatility_regime",
+               "oc_spread", "upper_wick",
+               "open_return", "high_return", "low_return", "close_return"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,8 +57,8 @@ df.drop(columns=["time"], inplace=True)
 # TARGET VARIABLE: net return over next 4 candles
 df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
 conditions = [
-    df["forward_return"] < -deadzone, # downward move
-    df["forward_return"] > deadzone # upward move
+    df["forward_return"] < -0.5 * df["atr_14"], # downward move
+    df["forward_return"] > 0.5 * df["atr_14"] # upward move
 ]
 choices = [0, 2]
 df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
@@ -64,10 +67,6 @@ df.dropna(inplace=True)
 # SEPARATE FEATURES AND LABELS (input and output)
 features = df[featureList]
 labels = df["target"]
-
-# INTEGRATE XGBOOST SIGNALS
-features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
-features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 # prune features
 features.drop(columns=prunedFeatures, inplace=True) # !!! featureList remains outdated but is not used later
@@ -211,11 +210,11 @@ match arch:
 
 # LOSS FUNCTION AND OPTIMISER
 classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
+classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
 classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
-criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
+criterion = nn.CrossEntropyLoss() # function to minimise
 optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
@@ -224,6 +223,16 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
+
+# for setting minimum probability threshold for a flat prediction
+def predictByThreshold(probs, threshold=0.36):
+    preds = []
+    for p in probs:
+        if p[1] > max(threshold, p[0], p[2]):
+            preds.append(1)
+        else:
+            preds.append(0 if p[0] > p[2] else 2)
+    return np.array(preds)
 
 # for early stopping and saving best model
 bestValF1 = 0
@@ -246,7 +255,8 @@ for _ in range(epochs):
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
-        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu   
+        valProbs = torch.softmax(valLogits, dim=1).cpu().numpy() # convert to probabilities for each class (first dimension sums to 1)
+        valPreds = predictByThreshold(valProbs)
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
 
     # check for early stopping
@@ -267,7 +277,7 @@ model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
     testProbs = torch.softmax(testLogits, dim=1).cpu().numpy() # convert to probabilities for each class (first dimension sums to 1)
-    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+    testPreds = predictByThreshold(testProbs)
     
 # EVALUATE MODEL
 accuracy = accuracy_score(testTrue, testPreds)*100
@@ -277,6 +287,7 @@ rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="mac
 # CONFUSION MATRIX
 cmatrix = confusion_matrix(testTrue, testPreds)
 cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=["Pred -", "Pred ~", "Pred +"])
+cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 print(f"Accuracy: {accuracy:.3f}%")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")

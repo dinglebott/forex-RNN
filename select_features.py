@@ -17,15 +17,15 @@ arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
 hiddenSize = 128 # no. of neurons in hidden state
 numLayers = 2 # no. of layers in the LSTM
-dropOut = 0.25 # equivalent of subsample for RNN
+dropOut = 0.4 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 1.5e-4
-weightDecay = 5e-4
-batchSize = 1024
-clipGradNorm = 5.1
+learningRate = 6e-4
+weightDecay = 5.3e-5
+batchSize = 512
+clipGradNorm = 5.2
 # CNN params
-numFilters = 64
+numFilters = 128
 kernelSize = 5
 # other
 epochs = 80 # early stopping implemented
@@ -53,8 +53,8 @@ df.drop(columns=["time"], inplace=True)
 # TARGET VARIABLE: net return over next 4 candles
 df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
 conditions = [
-    df["forward_return"] < -deadzone, # downward move
-    df["forward_return"] > deadzone # upward move
+    df["forward_return"] < -0.5 * df["atr_14"], # downward move
+    df["forward_return"] > 0.5 * df["atr_14"] # upward move
 ]
 choices = [0, 2]
 df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
@@ -63,11 +63,6 @@ df.dropna(inplace=True)
 # SEPARATE FEATURES AND LABELS (input and output)
 labels = df["target"]
 features = df[featureList]
-
-# INTEGRATE XGBOOST SIGNALS
-features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
-featureList.extend(["xgb_0", "xgb_1", "xgb_2"])
-features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]

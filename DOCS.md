@@ -90,6 +90,38 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 3
+*Changes from v2: Implement wavelet de-noising and minimum probability threshold for flat class*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["atr_14",\
+"bb_width", "bb_position",\
+"hl_spread", "lower_wick",\
+"normalised_ema15", "normalised_ema50", "ema_cross",\
+"rsi_14", "macd_hist", "vol_ratio", "vol_momentum"]\
+**Hyperparameters:**\
+hidden_size: 128\
+num_layers: 2\
+dropout: 0.26\
+lookback: 20\
+optimiser: Adam\
+lr: 0.003\
+weight_decay: 0.0006\
+batch_size: 1024\
+clip_grad_norm: 5.1\
+num_filters: 128\
+kernel_size: 5\
+**Accuracy:** 44.771%\
+**F1 score (macro-averaged):** 0.45008\
+**ROC-AUC score:** 0.63238\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 250 | 123 | 73 |
+| Real ~ | 246 | 205 | 141 |
+| Real + | 100 | 162 | 230 |
+<br/>
+
 ### Model 2
 *Changes from v1: Implemented learning rate scheduler, added CNN layers, expanded training data to start from 2005*\
 **Train:** 2005 - 2024\

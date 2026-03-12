@@ -28,11 +28,9 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
                "open_return", "high_return", "low_return", "close_return"]
 prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
-                  "volatility_regime",
-                  "bb_width",
-                  "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-                  "normalised_ema15", "normalised_ema50",
-                  "macd_hist", "vol_momentum", "xgb_0"]
+               "volatility_regime",
+               "oc_spread", "upper_wick",
+               "open_return", "high_return", "low_return", "close_return"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,8 +50,8 @@ df.drop(columns=["time"], inplace=True)
 # TARGET VARIABLE: net return over next 4 candles
 df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
 conditions = [
-    df["forward_return"] < -deadzone, # downward move
-    df["forward_return"] > deadzone # upward move
+    df["forward_return"] < -0.5 * df["atr_14"], # downward move
+    df["forward_return"] > 0.5 * df["atr_14"] # upward move
 ]
 choices = [0, 2]
 df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
@@ -62,10 +60,6 @@ df.dropna(inplace=True)
 # SEPARATE FEATURES AND LABELS (input and output)
 features = df[featureList]
 labels = df["target"]
-
-# INTEGRATE XGBOOST SIGNALS
-features = pd.concat([features, xgbSignals], axis=1) # shape (samples, features)
-features.dropna(inplace=True) # drop rows with no xgbSignals (warmup rows)
 
 # prune features
 features.drop(columns=prunedFeatures, inplace=True) # !!! featureList remains outdated but is not used later
@@ -199,20 +193,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [512, 768, 1024, 1536]),
-        "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
+        "hidden_size": trial.suggest_categorical("hidden_size", [128, 256, 512, 1024]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
-    dropout = trial.suggest_float("dropout", 0.15, 0.35) # for CNN
+    dropout = trial.suggest_float("dropout", 0.3, 0.5) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_categorical("lookback", [30, 35, 40, 45, 50, 55, 60])
+    lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 5e-5, 1e-3, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 5e-5, 5e-4)
-    batchSize = trial.suggest_categorical("batch_size", [256, 512, 1024, 1536, 2048])
+    learningRate = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 5e-3, log=True)
+    batchSize = trial.suggest_categorical("batch_size", [256, 512, 1024])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [32, 64, 128, 256])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -328,7 +322,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=80, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
