@@ -110,9 +110,10 @@ def predictByThreshold(probs, threshold=0.35):
             preds.append(0 if p[0] > p[2] else 2)
     return preds
 
-logits = model(X)
-probs = torch.softmax(logits, dim=1).cpu().numpy()
-preds = predictByThreshold(probs)
+with torch.no_grad():
+    logits = model(X)
+    probs = torch.softmax(logits, dim=1).cpu().numpy()
+    preds = predictByThreshold(probs)
 
 # DISPLAY RESULTS
 def getLabel(num):
