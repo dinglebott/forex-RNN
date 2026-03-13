@@ -8,7 +8,7 @@ import numpy as np
 import pywt
 from pykalman import KalmanFilter
 
-def denoise(series, wavelet='db4', level=3):
+def denoise(series, wavelet='db4', level=3): # WARNING: NOT CAUSAL (dont trust this shit)
     coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
     coeffs[1] = np.zeros_like(coeffs[1])  # zero the highest-frequency components (noise)
     return pywt.waverec(coeffs, wavelet) # reconstruct series with noise removed
@@ -50,9 +50,6 @@ def parseData(jsonPath):
     df = pd.DataFrame(records)
 
     # denoise
-    df["open"] = kalmanDenoise(df["open"].values.copy())[:len(df)]
-    df["high"] = kalmanDenoise(df["high"].values.copy())[:len(df)]
-    df["low"] = kalmanDenoise(df["low"].values.copy())[:len(df)]
     df["close"] = kalmanDenoise(df["close"].values.copy())[:len(df)]
 
     # ADD FEATURES

@@ -225,7 +225,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for setting minimum probability threshold for a flat prediction
-def predictByThreshold(probs, threshold=0.35):
+def predictByThreshold(probs, threshold=0.36):
     preds = []
     for p in probs:
         if p[1] > max(threshold, p[0], p[2]):
