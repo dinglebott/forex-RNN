@@ -4,7 +4,6 @@ import torch.nn as nn
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from custom_modules.xgboost_trainer import xgbSignals
 import copy
 from sklearn.metrics import f1_score
 import os
@@ -50,19 +49,9 @@ df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
-# TARGET VARIABLE: net return over next 4 candles
-df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
-conditions = [
-    df["forward_return"] < -0.5 * df["atr_14"], # downward move
-    df["forward_return"] > 0.5 * df["atr_14"] # upward move
-]
-choices = [0, 2]
-df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
-df.dropna(inplace=True)
-
 # SEPARATE FEATURES AND LABELS (input and output)
-labels = df["target"]
 features = df[featureList]
+labels = df["target"]
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
@@ -212,6 +201,16 @@ optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[opti
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
 
+# for setting minimum probability threshold for a flat prediction
+def predictByThreshold(probs, threshold=0.36):
+    preds = []
+    for p in probs:
+        if p[1] > max(threshold, p[0], p[2]):
+            preds.append(1)
+        else:
+            preds.append(0 if p[0] > p[2] else 2)
+    return np.array(preds)
+
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
@@ -242,7 +241,8 @@ for epoch in range(epochs):
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valLoss = criterion(valLogits, y_val).item()
-        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+        valProbs = torch.softmax(valLogits, dim=1).cpu().numpy()
+        valPreds = predictByThreshold(valProbs) # convert to predictions
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.5f} | Val loss: {valLoss:.5f} | Val F1: {valF1Score:.5f}")
 
@@ -267,7 +267,8 @@ if bestModelState is not None:
 model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
-    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+    testProbs = torch.softmax(testLogits, dim=1).cpu().numpy()
+    testPreds = predictByThreshold(testProbs) # convert to predictions
     
 # EVALUATE MODEL
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)

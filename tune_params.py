@@ -27,10 +27,6 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "normalised_ema15", "normalised_ema50", "ema_cross",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
                "open_return", "high_return", "low_return", "close_return"]
-prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
-               "volatility_regime",
-               "oc_spread", "upper_wick",
-               "open_return", "high_return", "low_return", "close_return"]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,22 +43,18 @@ df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
-# TARGET VARIABLE: net return over next 4 candles
-df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
-conditions = [
-    df["forward_return"] < -0.5 * df["atr_14"], # downward move
-    df["forward_return"] > 0.5 * df["atr_14"] # upward move
-]
-choices = [0, 2]
-df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
-df.dropna(inplace=True)
+# GET FEATURES AND LABELS (input and output)
+directory = "results"
+filename = "features.json"
+filepath = os.path.join(directory, filename)
+with open(filepath, "r") as file:
+    rawFeatures = json.load(file) # rawFeatures is a python dict
+# extract top 10 features into list
+featureList = list(rawFeatures.keys())[:10]
+print("Best 10 features:", featureList)
 
-# SEPARATE FEATURES AND LABELS (input and output)
 features = df[featureList]
 labels = df["target"]
-
-# prune features
-features.drop(columns=prunedFeatures, inplace=True) # !!! featureList remains outdated but is not used later
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]
@@ -173,12 +165,22 @@ class ForexHybrid(nn.Module):
         return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # HELPER FUNCTIONS: predict in batches to prevent vram overflow
+# for setting minimum probability threshold for a flat prediction
+def predictByThreshold(probs, threshold=0.36):
+    preds = []
+    for p in probs:
+        if p[1] > max(threshold, p[0], p[2]):
+            preds.append(1)
+        else:
+            preds.append(0 if p[0] > p[2] else 2)
+    return np.array(preds)
 def batchPredict(model, X, batchSize=1024):
     allPreds = []
     for i in range(0, len(X), batchSize):
         batch = X[i : i + batchSize]
         logits = model(batch) # raw output of model => tensor of shape (samples, 3)
-        preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions, shift to cpu
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+        preds = predictByThreshold(probs) # convert to predictions
         allPreds.append(preds)
     return np.concatenate(allPreds)
 def batchLoss(model, X, y, criterion, batchSize=1024):
@@ -326,10 +328,23 @@ study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
+hyperparameters = {
+    "modelParams": {
+        "hidden_size": study.best_params["hidden_size"],
+        "num_layers": study.best_params["num_layers"],
+        "dropout": study.best_params["dropout"],
+        "num_filters": study.best_params["num_filters"],
+        "kernel_size": study.best_params["kernel_size"]
+    },
+
+    "lookback": study.best_params["lookback"],
+
+    "allParams": study.best_params
+}
 directory = "results"
 if not os.path.exists(directory):
     os.makedirs(directory)
 filename = "hyperparameters.json"
 filepath = os.path.join(directory, filename)
-with open(filepath, "w") as f:
-    json.dump(study.best_params, f, indent=4)
+with open(filepath, "w") as file:
+    json.dump(hyperparameters, file, indent=4)

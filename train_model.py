@@ -8,25 +8,21 @@ from sklearn.preprocessing import MinMaxScaler
 import copy
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 import os
+import json
 
 # GLOBAL VARIABLES
 yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
-# hyperparameters
-hiddenSize = 128 # no. of neurons in hidden state
-numLayers = 2 # no. of layers in the LSTM
-dropOut = 0.26 # equivalent of subsample for RNN
-lookback = 20
-optimiserName = "Adam"
-learningRate = 1e-3
-weightDecay = 6e-4
-batchSize = 1024
-clipGradNorm = 5.1
-# CNN params
-numFilters = 128
-kernelSize = 5
+# GET HYPERPARAMETERS
+directory = "results"
+filename = "hyperparameters.json"
+filepath = os.path.join(directory, filename)
+with open(filepath, "r") as file:
+    hyperparameters = json.load(file) # hyperparameters is a python dict
+
+hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 80 # early stopping implemented
 deadzone = 0.0015
@@ -36,10 +32,6 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
                "hl_spread", "oc_spread", "upper_wick", "lower_wick",
                "normalised_ema15", "normalised_ema50", "ema_cross",
                "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
-               "open_return", "high_return", "low_return", "close_return"]
-prunedFeatures = ["return", "return_4", "log_return", "log_return_4",
-               "volatility_regime",
-               "oc_spread", "upper_wick",
                "open_return", "high_return", "low_return", "close_return"]
 
 # use CUDA if available, otherwise use CPU
@@ -54,22 +46,18 @@ df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
-# TARGET VARIABLE: net return over next 4 candles
-df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
-conditions = [
-    df["forward_return"] < -0.5 * df["atr_14"], # downward move
-    df["forward_return"] > 0.5 * df["atr_14"] # upward move
-]
-choices = [0, 2]
-df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
-df.dropna(inplace=True)
+# GET FEATURES AND LABELS (input and output)
+directory = "results"
+filename = "features.json"
+filepath = os.path.join(directory, filename)
+with open(filepath, "r") as file:
+    rawFeatures = json.load(file) # rawFeatures is a python dict
+# extract top 10 features into list
+featureList = list(rawFeatures.keys())[:10]
+print("Best 10 features:", featureList)
 
-# SEPARATE FEATURES AND LABELS (input and output)
 features = df[featureList]
 labels = df["target"]
-
-# prune features
-features.drop(columns=prunedFeatures, inplace=True) # !!! featureList remains outdated but is not used later
 
 labels = labels[features.index] # align indexes
 timestamps = timestamps[features.index]

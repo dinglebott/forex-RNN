@@ -55,7 +55,7 @@ class ForexHybrid(nn.Module):
         return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # DEFINE FEATURES (copy-paste from the model training features exactly)
-directory = "models"
+directory = "results"
 filename = f"features_v{version}.json"
 filepath = os.path.join(directory, filename)
 # deserialise json data
@@ -101,7 +101,7 @@ for i in range(len(features) - lookback + 1):
 X = torch.tensor(np.array(X), dtype=torch.float32, device=device)
 
 # RUN INFERENCES
-def predictByThreshold(probs, threshold=0.35):
+def predictByThreshold(probs, threshold=0.36):
     preds = []
     for p in probs:
         if p[1] > max(threshold, p[0], p[2]):

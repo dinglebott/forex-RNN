@@ -1,7 +1,6 @@
 # EXPORTS:
 # parseData() adds features and returns DataFrame
 # splitByDate() returns specified slice of DataFrame by date
-# denoise() performs wavelet deconstruction to remove noise (hopefully)
 import json
 import pandas as pd
 import numpy as np
@@ -51,6 +50,8 @@ def parseData(jsonPath):
 
     # denoise
     df["close"] = kalmanDenoise(df["close"].values.copy())[:len(df)]
+    df["open"] = kalmanDenoise(df["open"].values.copy())[:len(df)]
+    df["volume"] = kalmanDenoise(df["volume"].values.copy())[:len(df)]
 
     # ADD FEATURES
     # helper
@@ -115,6 +116,15 @@ def parseData(jsonPath):
     df["dist_ema15"] = (df["close"] - df["raw_ema15"]) / df["atr_14"]
     df["vol_trend"] = df["vol_ratio"] * df["normalised_ema50"]
     
+    # TARGET VARIABLE
+    df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
+    conditions = [
+        df["forward_return"] < -0.5 * df["atr_14"], # downward move
+        df["forward_return"] > 0.5 * df["atr_14"] # upward move
+    ]
+    choices = [0, 2]
+    df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
+
     # drop empty rows and return
     df.dropna(inplace=True)
     return df
