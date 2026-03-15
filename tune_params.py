@@ -3,10 +3,8 @@ from custom_modules import dataparser
 import torch
 import torch.nn as nn
 import numpy as np
-import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import TimeSeriesSplit
-from custom_modules.xgboost_trainer import xgbSignals
 import copy
 from sklearn.metrics import f1_score
 import os
@@ -50,7 +48,7 @@ filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top 10 features into list
-featureList = list(rawFeatures.keys())[:10]
+featureList = list(rawFeatures.keys())[:11]
 print("Best 10 features:", featureList)
 
 features = df[featureList]

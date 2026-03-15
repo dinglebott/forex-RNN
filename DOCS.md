@@ -90,7 +90,7 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
-### Model 3
+### Model 3 (invalid: data leaked in wavelet deconstruction)
 *Changes from v2: Implement wavelet de-noising, minimum probability threshold for flat class, and class weighting*\
 **Train:** 2005 - 2024\
 **Test:** 2025\
