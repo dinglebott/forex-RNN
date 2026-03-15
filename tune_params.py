@@ -47,9 +47,9 @@ filename = "features.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
-# extract top 10 features into list
+# extract top 11 features into list
 featureList = list(rawFeatures.keys())[:11]
-print("Best 10 features:", featureList)
+print("Best 11 features:", featureList)
 
 features = df[featureList]
 labels = df["target"]
@@ -193,8 +193,8 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [128, 256, 512, 1024]),
-        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
+        "hidden_size": trial.suggest_categorical("hidden_size", [128, 256, 512]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
     }
     dropout = trial.suggest_float("dropout", 0.3, 0.5) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
@@ -205,7 +205,7 @@ def objective(trial):
     batchSize = trial.suggest_categorical("batch_size", [256, 512, 1024])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [32, 64, 128, 256])
+        numFilters = trial.suggest_categorical("num_filters", [32, 64, 128])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
 
     # CREATE SEQUENCES (already converted to tensors by function)
