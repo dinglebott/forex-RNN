@@ -1,0 +1,17 @@
+{
+    "atr_adjusted_return": "manual",
+    "atr_14": "manual",
+    "hl_spread": "manual",
+    "volatility_regime": "manual",
+    "vol_ratio_lag3": "manual",
+    "body_ratio": "manual",
+    "volatility_momentum": "manual",
+    "vol_momentum": "manual",
+    "vol_ratio_lag4": "manual",
+    "trend_strength": "manual",
+    "return_lag4": "manual",
+    "vol_ratio": "manual",
+    "bb_position": "manual",
+    "vol_ratio_lag1": "manual",
+    "bb_width": "manual"
+}

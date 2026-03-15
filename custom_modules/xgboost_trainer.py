@@ -5,24 +5,30 @@ from . import dataparser
 from datetime import datetime
 import numpy as np
 import pandas as pd
+import os
+import json
 
 yearNow = 2026
+version = 7
 # LOAD DATA
 df = dataparser.parseData(f"json_data/EUR_USD_H4_{yearNow - 21}-01-01_{yearNow}-01-01.json")
-trainedXgbFilepath = "custom_modules/XGBoost_EUR_USD_H4_2026_v6.json"
+directory = "custom_modules"
+filename = f"XGBoost_EUR_USD_H4_2026_v{version}.json"
+trainedXgbFilepath = os.path.join(directory, filename)
 
-# FEATURES AND HYPERPARAMETERS (obtained from trading-trees project)
-features = ["atr_14", "volatility_momentum", "vol_ratio_lag3", "volatility_regime", "vol_ratio_lag4", "hl_spread", "normalised_ema50",
-            "vol_ratio_lag1", "trend_strength", "bb_width", "vol_ratio", "vol_momentum", "dist_ema15", "macd_hist", "vol_trend"]
-params = {
-    "max_depth": 3,
-    "learning_rate": 0.0737224128,
-    "subsample": 0.4283120798,
-    "colsample_bytree": 0.5598602095,
-    "min_child_weight": 82,
-    "reg_alpha": 4.9376459424,
-    "reg_lambda": 17.8068765017
-}
+# FEATURES AND HYPERPARAMETERS (from trading-trees project)
+filename = f"featues_v{version}.json"
+filepath = os.path.join(directory, filename)
+with open(filepath, "r") as file:
+    rawFeatures = json.load(file) # python dict
+features = list(rawFeatures.keys())
+
+filename = f"hyperparameters_v{version}.json"
+filepath = os.path.join(directory, filename)
+with open(filepath, "r") as file:
+    params = json.load(file)
+params["max_depth"] = int(params["max_depth"])
+params["min_child_weight"] = int(params["min_child_weight"])
 
 # TARGET VARIABLE: next 4 candles net return => positive (2) or negative (0)
 df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
