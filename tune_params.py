@@ -42,7 +42,7 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 14
+numFeatures = 13
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
@@ -241,7 +241,7 @@ def objective(trial):
 
         # LOSS FUNCTION AND OPTIMISER
         classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-        classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
+        classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
         classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
         weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 

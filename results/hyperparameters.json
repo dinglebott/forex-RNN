@@ -1,23 +1,23 @@
 {
     "modelParams": {
-        "hidden_size": 200,
+        "hidden_size": 300,
         "num_layers": 1,
-        "dropout": 0.45344821289947745,
-        "num_filters": 32,
-        "kernel_size": 3
+        "dropout": 0.4139906708802119,
+        "num_filters": 96,
+        "kernel_size": 5
     },
-    "lookback": 20,
+    "lookback": 15,
     "allParams": {
-        "hidden_size": 200,
+        "hidden_size": 300,
         "num_layers": 1,
-        "dropout": 0.45344821289947745,
-        "lookback": 20,
-        "optimiser": "RMSprop",
-        "lr": 0.0008587872134464722,
-        "weight_decay": 0.00230350942300558,
+        "dropout": 0.4139906708802119,
+        "lookback": 15,
+        "optimiser": "Adam",
+        "lr": 0.0007568450659644952,
+        "weight_decay": 0.0004009673519964813,
         "batch_size": 768,
-        "clip_grad_norm": 5.4429645958740025,
-        "num_filters": 32,
-        "kernel_size": 3
+        "clip_grad_norm": 4.439533266577831,
+        "num_filters": 96,
+        "kernel_size": 5
     }
 }

@@ -47,7 +47,7 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 14
+numFeatures = 13
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
@@ -199,7 +199,9 @@ match arch:
         ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-classWeights = np.array([1.1, 0.9, 1.2])
+classCounts = np.bincount(labels_train.astype(int)) # no. of each class
+classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
+classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
 criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
@@ -283,6 +285,7 @@ print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
+print(f"Class weights: {classWeights}")
 
 # SAVE MODEL
 directory = "models"

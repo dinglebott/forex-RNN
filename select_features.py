@@ -19,8 +19,8 @@ numLayers = 2 # no. of layers in the LSTM
 dropOut = 0.4 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 6e-5
-weightDecay = 5e-3
+learningRate = 1e-4
+weightDecay = 1e-4
 batchSize = 512
 clipGradNorm = 6
 # CNN params
@@ -192,7 +192,7 @@ match arch:
 
 # LOSS FUNCTION AND OPTIMISER
 classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
+classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
 classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 

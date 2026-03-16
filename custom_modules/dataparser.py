@@ -4,39 +4,29 @@
 import json
 import pandas as pd
 import numpy as np
-import pywt
-from pykalman import KalmanFilter
-from scipy.signal import savgol_coeffs
-from numpy.lib.stride_tricks import sliding_window_view
 
-def denoise(series, wavelet='db4', level=3): # WARNING: NOT CAUSAL (dont trust this shit)
-    coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
-    coeffs[1] = np.zeros_like(coeffs[1])  # zero the highest-frequency components (noise)
-    return pywt.waverec(coeffs, wavelet) # reconstruct series with noise removed
-
-def causalDenoise(series, wavelet='db4', level=4, min_length=40):
-    result = series.copy()
-    for i in range(min_length, len(series)):
-        window = series[:i+1].copy()
-        coeffs = pywt.wavedec(window, wavelet, level=level)
-        coeffs[1] = np.zeros_like(coeffs[1])
-        result[i] = pywt.waverec(coeffs, wavelet)[-1] # reconstruct series, grab last element
+def ultimateSmoother(series, period=5):
+    values = series.values.astype(float)
+    result = np.zeros(len(values))
+    # coefficients
+    f = (1.41421 * np.pi) / period
+    a1 = np.exp(-f)
+    c2 = 2 * a1 * np.cos(f)
+    c3 = -(a1 ** 2)
+    c1 = (1 - c2 - c3) / 4
+    # initialise
+    result[0] = values[0]
+    result[1] = values[1]
+    # recurrence relation
+    for i in range(2, len(values)):
+        result[i] = (
+            (1 - c1) * values[i] # weighted input
+            + (2 * c1 - c2) * values[i-1] # weighted previous input
+            - (c1 + c3) * values[i-2] # weighted input 2 bars ago
+            + c2 * result[i-1] # feedback from previous output
+            + c3 * result[i-2] # feedback from output 2 bars ago
+        )
     return result
-
-def kalmanDenoise(series):
-    kf = KalmanFilter(transition_matrices=[1], observation_matrices=[1],
-                      initial_state_mean=series[0],
-                      n_dim_obs=1)
-    kf = kf.em(series, n_iter=10)
-    stateMeans, _ = kf.filter(series)
-    return stateMeans.flatten()
-
-def savgolFilter(series: np.ndarray, windowLength=5, polyorder=3):
-    coeffs = savgol_coeffs(windowLength, polyorder, deriv=0, pos=windowLength - 1) # polynomial coefficients
-    filtered = series.copy().astype(float)
-    windows = sliding_window_view(series, window_shape=windowLength) # array of sliding windows taken from series
-    filtered[windowLength - 1:] = windows @ coeffs # matrix product
-    return filtered
 
 def parseData(jsonPath):
     # deserialise json data
@@ -58,12 +48,18 @@ def parseData(jsonPath):
     df = pd.DataFrame(records)
 
     # denoise
-    df["close_smooth"] = savgolFilter(df["close"].values.copy())[:len(df)]
-    df["volume"] = savgolFilter(df["volume"].values.copy())[:len(df)]
+    df["close_smooth"] = ultimateSmoother(df["close"])[:len(df)]
+    df["volume"] = ultimateSmoother(df["volume"])[:len(df)]
+    # rebuild candle around smoothed close
+    df["open"] = df["close_smooth"] + (df["open"] - df["close"])
+    df["high"] = df["close_smooth"] + (df["high"] - df["close"])
+    df["low"] = df["close_smooth"] + (df["low"] - df["close"])
 
     # ADD FEATURES
     # helper
     def getEma(period):
+        return df["close"].ewm(span=period, adjust=False).mean()
+    def getEmaSmooth(period):
         return df["close_smooth"].ewm(span=period, adjust=False).mean()
     # Raw
     df["open_return"] = (df["open"] / df["close_smooth"].shift(1)) - 1
@@ -97,8 +93,8 @@ def parseData(jsonPath):
     df["lower_wick"] = (df[["open", "close_smooth"]].min(axis=1) - df["low"]) / df["atr_14"]
     # EMAs
     for period in (15, 50):
-        df[f"raw_ema{period}"] = getEma(period)
-        df[f"normalised_ema{period}"] = (df["close_smooth"] / df[f"raw_ema{period}"]) - 1
+        df[f"raw_ema{period}"] = getEmaSmooth(period)
+        df[f"normalised_ema{period}"] = (df["close"] / df[f"raw_ema{period}"]) - 1
     df["ema_cross"] = df["normalised_ema15"] - df["normalised_ema50"]
     # RSI
     def rsi(series, n=14):
@@ -107,7 +103,7 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close_smooth"])
+    df["rsi_14"] = rsi(df["close"])
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
@@ -116,20 +112,13 @@ def parseData(jsonPath):
     vol_sma30 = df["volume"].rolling(30).mean()
     df["vol_ratio"] = df["volume"] / vol_sma30
     df["vol_momentum"] = df["vol_ratio"] - df["vol_ratio"].rolling(5).mean()
-    # for the xgboost
-    df["atr_adjusted_return"] = df["return"] / df["atr_14"]
-    df["volatility_momentum"] = df["rsi_14"] * df["atr_14"]
-    df["body_ratio"] = (df["oc_spread"] / df["hl_spread"]).clip(-1, 1) # prevent infinity values
-    for lag in (1, 3, 4):
-        df[f"vol_ratio_lag{lag}"] = df["vol_ratio"].shift(lag)
-    df["return_lag4"] = df["return"].shift(4)
-    df["trend_strength"] = abs(df["normalised_ema15"] - df["normalised_ema50"])
+    # TODO: for the xgboost
     
     # TARGET VARIABLE
     df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
     conditions = [
-        df["forward_return"] < -0.35 * df["atr_14"], # downward move
-        df["forward_return"] > 0.35 * df["atr_14"] # upward move
+        df["forward_return"] < -0.48 * df["atr_14"], # downward move
+        df["forward_return"] > 0.48 * df["atr_14"] # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
