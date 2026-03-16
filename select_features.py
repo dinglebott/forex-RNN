@@ -14,15 +14,15 @@ instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 128 # no. of neurons in hidden state
+hiddenSize = 512 # no. of neurons in hidden state
 numLayers = 2 # no. of layers in the LSTM
 dropOut = 0.4 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "Adam"
-learningRate = 6e-4
-weightDecay = 5.3e-5
+learningRate = 6e-5
+weightDecay = 5e-3
 batchSize = 512
-clipGradNorm = 5.2
+clipGradNorm = 6
 # CNN params
 numFilters = 128
 kernelSize = 5
@@ -41,8 +41,8 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ENSURE REPRODUCIBILITY
-torch.manual_seed(16) # ensure reproducible results
-np.random.seed(16)
+torch.manual_seed(42) # ensure reproducible results
+np.random.seed(42)
 
 # LOAD DATA
 df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
@@ -192,28 +192,18 @@ match arch:
 
 # LOSS FUNCTION AND OPTIMISER
 classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
+classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
 classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
 criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
 optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
-
-# for setting minimum probability threshold for a flat prediction
-def predictByThreshold(probs, threshold=0.36):
-    preds = []
-    for p in probs:
-        if p[1] > max(threshold, p[0], p[2]):
-            preds.append(1)
-        else:
-            preds.append(0 if p[0] > p[2] else 2)
-    return np.array(preds)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=5)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=True)
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for early stopping and saving best model
@@ -242,7 +232,7 @@ for epoch in range(epochs):
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valLoss = criterion(valLogits, y_val).item()
         valProbs = torch.softmax(valLogits, dim=1).cpu().numpy()
-        valPreds = predictByThreshold(valProbs) # convert to predictions
+        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.5f} | Val loss: {valLoss:.5f} | Val F1: {valF1Score:.5f}")
 
@@ -268,7 +258,7 @@ model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
     testProbs = torch.softmax(testLogits, dim=1).cpu().numpy()
-    testPreds = predictByThreshold(testProbs) # convert to predictions
+    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions
     
 # EVALUATE MODEL
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)

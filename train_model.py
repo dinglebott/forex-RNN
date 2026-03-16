@@ -21,7 +21,7 @@ filename = "hyperparameters.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     hyperparameters = json.load(file) # hyperparameters is a python dict
-
+print(f"Hyperparameters: {hyperparameters['allParams']}")
 hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 80 # early stopping implemented
@@ -38,8 +38,8 @@ featureList = ["return", "return_4", "log_return", "log_return_4",
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ENSURE REPRODUCIBILITY
-torch.manual_seed(16)
-np.random.seed(16)
+torch.manual_seed(42)
+np.random.seed(42)
 
 # LOAD DATA
 df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
@@ -47,14 +47,15 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
+numFeatures = 14
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
-# extract top 10 features into list
-featureList = list(rawFeatures.keys())[:10]
-print("Best 10 features:", featureList)
+# extract top n features into list
+featureList = list(rawFeatures.keys())[:numFeatures]
+print(f"Best {numFeatures} features:", featureList)
 
 features = df[featureList]
 labels = df["target"]
@@ -106,7 +107,8 @@ y_val = torch.tensor(y_val, dtype=torch.long, device=device)
 y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 # shape of X: (samples, timesteps, features)
 # shape of y: (samples, output_classes)
-valTrue = y_val.cpu().numpy() # for f1 score later
+trainTrue = y_train.cpu().numpy() # for f1 score later
+valTrue = y_val.cpu().numpy()
 testTrue = y_test.cpu().numpy()
 
 # BUILD MODEL
@@ -197,12 +199,10 @@ match arch:
         ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
-classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
+classWeights = np.array([1.1, 0.9, 1.2])
 weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
-criterion = nn.CrossEntropyLoss(weightsTensor) # function to minimise
+criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
 optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
 optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
@@ -212,15 +212,14 @@ dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=False)
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
-# for setting minimum probability threshold for a flat prediction
-def predictByThreshold(probs, threshold=0.36):
-    preds = []
-    for p in probs:
-        if p[1] > max(threshold, p[0], p[2]):
-            preds.append(1)
-        else:
-            preds.append(0 if p[0] > p[2] else 2)
-    return np.array(preds)
+def batchPredict(model, X, batchSize=1024):
+    allPreds = []
+    for i in range(0, len(X), batchSize):
+        batch = X[i : i + batchSize]
+        logits = model(batch) # raw output of model => tensor of shape (samples, 3)
+        preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions
+        allPreds.append(preds)
+    return np.concatenate(allPreds)
 
 # for early stopping and saving best model
 bestValF1 = 0
@@ -244,7 +243,7 @@ for _ in range(epochs):
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valProbs = torch.softmax(valLogits, dim=1).cpu().numpy() # convert to probabilities for each class (first dimension sums to 1)
-        valPreds = predictByThreshold(valProbs)
+        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy()
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
 
     # check for early stopping
@@ -265,19 +264,23 @@ model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
     testProbs = torch.softmax(testLogits, dim=1).cpu().numpy() # convert to probabilities for each class (first dimension sums to 1)
-    testPreds = predictByThreshold(testProbs)
+    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy()
+    trainPreds = batchPredict(model, X_train)
     
 # EVALUATE MODEL
 accuracy = accuracy_score(testTrue, testPreds)*100
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
+trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
 
 # CONFUSION MATRIX
 cmatrix = confusion_matrix(testTrue, testPreds)
 cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=["Pred -", "Pred ~", "Pred +"])
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
+cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Accuracy: {accuracy:.3f}%")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
+print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 

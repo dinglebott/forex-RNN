@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import pywt
 from pykalman import KalmanFilter
+from scipy.signal import savgol_coeffs
+from numpy.lib.stride_tricks import sliding_window_view
 
 def denoise(series, wavelet='db4', level=3): # WARNING: NOT CAUSAL (dont trust this shit)
     coeffs = pywt.wavedec(series, wavelet, level=level) # decompose into 4 components
@@ -29,6 +31,13 @@ def kalmanDenoise(series):
     stateMeans, _ = kf.filter(series)
     return stateMeans.flatten()
 
+def savgolFilter(series: np.ndarray, windowLength=5, polyorder=3):
+    coeffs = savgol_coeffs(windowLength, polyorder, deriv=0, pos=windowLength - 1) # polynomial coefficients
+    filtered = series.copy().astype(float)
+    windows = sliding_window_view(series, window_shape=windowLength) # array of sliding windows taken from series
+    filtered[windowLength - 1:] = windows @ coeffs # matrix product
+    return filtered
+
 def parseData(jsonPath):
     # deserialise json data
     with open(jsonPath, "r") as file:
@@ -49,48 +58,47 @@ def parseData(jsonPath):
     df = pd.DataFrame(records)
 
     # denoise
-    df["close"] = kalmanDenoise(df["close"].values.copy())[:len(df)]
-    df["open"] = kalmanDenoise(df["open"].values.copy())[:len(df)]
-    df["volume"] = kalmanDenoise(df["volume"].values.copy())[:len(df)]
+    df["close_smooth"] = savgolFilter(df["close"].values.copy())[:len(df)]
+    df["volume"] = savgolFilter(df["volume"].values.copy())[:len(df)]
 
     # ADD FEATURES
     # helper
     def getEma(period):
-        return df["close"].ewm(span=period, adjust=False).mean()
+        return df["close_smooth"].ewm(span=period, adjust=False).mean()
     # Raw
-    df["open_return"] = (df["open"] / df["close"].shift(1)) - 1
-    df["high_return"] = (df["high"] / df["close"].shift(1)) - 1
-    df["low_return"] = (df["low"] / df["close"].shift(1)) - 1
-    df["close_return"] = (df["close"] / df["close"].shift(1)) - 1
+    df["open_return"] = (df["open"] / df["close_smooth"].shift(1)) - 1
+    df["high_return"] = (df["high"] / df["close_smooth"].shift(1)) - 1
+    df["low_return"] = (df["low"] / df["close_smooth"].shift(1)) - 1
+    df["close_return"] = (df["close_smooth"] / df["close_smooth"].shift(1)) - 1
     # Returns
-    df["return"] = df["close"].pct_change()
-    df["return_4"] = df["close"].pct_change(4)
-    df["log_return"] = np.log(df["close"] / df["close"].shift(1)) # natural log (base e)
-    df["log_return_4"] = np.log(df["close"] / df["close"].shift(4))
+    df["return"] = df["close_smooth"].pct_change()
+    df["return_4"] = df["close_smooth"].pct_change(4)
+    df["log_return"] = np.log(df["close_smooth"] / df["close_smooth"].shift(1)) # natural log (base e)
+    df["log_return_4"] = np.log(df["close_smooth"] / df["close_smooth"].shift(4))
     # ATR
     trueRange = pd.concat([
         df["high"] - df["low"],
-        (df["high"] - df["close"].shift(1)).abs(),
-        (df["low"]  - df["close"].shift(1)).abs()
+        (df["high"] - df["close_smooth"].shift(1)).abs(),
+        (df["low"]  - df["close_smooth"].shift(1)).abs()
     ], axis=1).max(axis=1) # greatest of 3 values
-    df["atr_14"] = trueRange.rolling(14).mean() / df["close"]
+    df["atr_14"] = trueRange.rolling(14).mean() / df["close_smooth"]
     df["volatility_regime"] = df["atr_14"] / df["atr_14"].rolling(50).mean()
     # Bollinger bands
-    bb_mid = df["close"].rolling(20).mean()
-    bb_std = df["close"].rolling(20).std()
+    bb_mid = df["close_smooth"].rolling(20).mean()
+    bb_std = df["close_smooth"].rolling(20).std()
     bb_upper = bb_mid + 2 * bb_std
     bb_lower = bb_mid - 2 * bb_std
     df["bb_width"] = (bb_upper - bb_lower) / bb_mid
-    df["bb_position"] = (df["close"] - bb_lower) / (bb_upper - bb_lower)
+    df["bb_position"] = (df["close_smooth"] - bb_lower) / (bb_upper - bb_lower)
     # Structure
-    df["hl_spread"] = (df["high"] - df["low"]) / df["close"]
-    df["oc_spread"] = (df["close"] - df["open"]) / df["close"]
-    df["upper_wick"] = (df["high"] - df[["open", "close"]].max(axis=1)) / df["atr_14"]
-    df["lower_wick"] = (df[["open", "close"]].min(axis=1) - df["low"]) / df["atr_14"]
+    df["hl_spread"] = (df["high"] - df["low"]) / df["close_smooth"]
+    df["oc_spread"] = (df["close_smooth"] - df["open"]) / df["close_smooth"]
+    df["upper_wick"] = (df["high"] - df[["open", "close_smooth"]].max(axis=1)) / df["atr_14"]
+    df["lower_wick"] = (df[["open", "close_smooth"]].min(axis=1) - df["low"]) / df["atr_14"]
     # EMAs
     for period in (15, 50):
         df[f"raw_ema{period}"] = getEma(period)
-        df[f"normalised_ema{period}"] = (df["close"] / df[f"raw_ema{period}"]) - 1
+        df[f"normalised_ema{period}"] = (df["close_smooth"] / df[f"raw_ema{period}"]) - 1
     df["ema_cross"] = df["normalised_ema15"] - df["normalised_ema50"]
     # RSI
     def rsi(series, n=14):
@@ -99,7 +107,7 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close"])
+    df["rsi_14"] = rsi(df["close_smooth"])
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
@@ -109,18 +117,19 @@ def parseData(jsonPath):
     df["vol_ratio"] = df["volume"] / vol_sma30
     df["vol_momentum"] = df["vol_ratio"] - df["vol_ratio"].rolling(5).mean()
     # for the xgboost
+    df["atr_adjusted_return"] = df["return"] / df["atr_14"]
     df["volatility_momentum"] = df["rsi_14"] * df["atr_14"]
+    df["body_ratio"] = (df["oc_spread"] / df["hl_spread"]).clip(-1, 1) # prevent infinity values
     for lag in (1, 3, 4):
         df[f"vol_ratio_lag{lag}"] = df["vol_ratio"].shift(lag)
+    df["return_lag4"] = df["return"].shift(4)
     df["trend_strength"] = abs(df["normalised_ema15"] - df["normalised_ema50"])
-    df["dist_ema15"] = (df["close"] - df["raw_ema15"]) / df["atr_14"]
-    df["vol_trend"] = df["vol_ratio"] * df["normalised_ema50"]
     
     # TARGET VARIABLE
     df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
     conditions = [
-        df["forward_return"] < -0.48 * df["atr_14"], # downward move
-        df["forward_return"] > 0.48 * df["atr_14"] # upward move
+        df["forward_return"] < -0.35 * df["atr_14"], # downward move
+        df["forward_return"] > 0.35 * df["atr_14"] # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)

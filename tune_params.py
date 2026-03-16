@@ -33,8 +33,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # ENSURE REPRODUCIBILITY
-torch.manual_seed(16)
-np.random.seed(16)
+torch.manual_seed(42)
+np.random.seed(42)
 
 # LOAD DATA
 df = dataparser.parseData(f"json_data/{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json")
@@ -42,14 +42,15 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
+numFeatures = 14
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
-# extract top 11 features into list
-featureList = list(rawFeatures.keys())[:11]
-print("Best 11 features:", featureList)
+# extract top n features into list
+featureList = list(rawFeatures.keys())[:numFeatures]
+print(f"Best {numFeatures} features:", featureList)
 
 features = df[featureList]
 labels = df["target"]
@@ -163,22 +164,12 @@ class ForexHybrid(nn.Module):
         return self.fc(lastTimestep) # map to prediction (batch_size, output size)
 
 # HELPER FUNCTIONS: predict in batches to prevent vram overflow
-# for setting minimum probability threshold for a flat prediction
-def predictByThreshold(probs, threshold=0.36):
-    preds = []
-    for p in probs:
-        if p[1] > max(threshold, p[0], p[2]):
-            preds.append(1)
-        else:
-            preds.append(0 if p[0] > p[2] else 2)
-    return np.array(preds)
 def batchPredict(model, X, batchSize=1024):
     allPreds = []
     for i in range(0, len(X), batchSize):
         batch = X[i : i + batchSize]
         logits = model(batch) # raw output of model => tensor of shape (samples, 3)
-        probs = torch.softmax(logits, dim=1).cpu().numpy()
-        preds = predictByThreshold(probs) # convert to predictions
+        preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions
         allPreds.append(preds)
     return np.concatenate(allPreds)
 def batchLoss(model, X, y, criterion, batchSize=1024):
@@ -193,20 +184,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [128, 256, 512]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [128, 200, 256, 300, 384, 512]),
         "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
     }
-    dropout = trial.suggest_float("dropout", 0.3, 0.5) # for CNN
+    dropout = trial.suggest_float("dropout", 0.3, 0.6) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
     lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
     optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
+    learningRate = trial.suggest_float("lr", 1e-5, 1e-3)
     weightDecay = trial.suggest_float("weight_decay", 1e-5, 5e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [256, 512, 1024])
+    batchSize = trial.suggest_categorical("batch_size", [256, 512, 768, 1024])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [32, 64, 128])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
+        numFilters = trial.suggest_categorical("num_filters", [32, 64, 96, 128])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -250,14 +241,14 @@ def objective(trial):
 
         # LOSS FUNCTION AND OPTIMISER
         classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-        classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
+        classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
         classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
         weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
 
         criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
         optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
         optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=10)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=5)
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned
