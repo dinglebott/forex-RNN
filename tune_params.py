@@ -1,5 +1,5 @@
 import optuna
-from custom_modules import dataparser
+from custom_modules import dataparser, lstm
 import torch
 import torch.nn as nn
 import numpy as np
@@ -17,7 +17,8 @@ granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # other
 epochs = 80 # early stopping implemented
-deadzone = 0.0015
+schedulerPatience = 5
+earlyStoppingPatience = 20
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
                "bb_width", "bb_position",
@@ -42,7 +43,7 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 13
+numFeatures = 12
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
@@ -99,69 +100,7 @@ def getSequences(fts, lbls, lookback, key): # key to differentiate train and tes
 trainValSplit = TimeSeriesSplit(n_splits=3)
 
 # BUILD MODEL (instantiated within objective)
-class ForexRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, dropout, output_size):
-        super(ForexRNN, self).__init__()
-        # LSTM layer: takes 3D tensor as input (batch_size, timesteps, features)
-        self.lstm = nn.LSTM(
-            input_size=input_size, # no. of features per datapoint
-            hidden_size=hidden_size, # no. of neurons in hidden state
-            num_layers=num_layers, # no. of layers in the LSTM
-            batch_first=True, # set batch size as first dimension of input tensor
-            dropout=dropout if num_layers > 1 else 0 # equivalent of subsample for RNN
-        )
-        # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
-        self.fc = nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        # x is 3D tensor (batch_size, timesteps, features)
-        lstmOutput, (hidden, cell) = self.lstm(x)
-        # lstmOutput: hidden state of EVERY timestep for the LAST layer only (batch_size, timesteps, hidden_size)
-        # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
-        # cell: similar to hidden but contains cell state instead of hidden state
-        lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
-        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
-
-class ForexHybrid(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, dropout, lstm_dropout, output_size,
-                 num_filters, kernel_size):
-        super(ForexHybrid, self).__init__()
-        # CNN layers: takes 3D tensor as input (batch_size, channels, length)
-        self.cnn = nn.Sequential(
-            nn.Conv1d(in_channels=input_size, out_channels=num_filters,
-                      kernel_size=kernel_size, padding=kernel_size//2),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=num_filters, out_channels=num_filters,
-                        kernel_size=kernel_size, padding=kernel_size//2),
-            nn.ReLU(),
-            nn.BatchNorm1d(num_filters), # normalise before passing to LSTM
-            nn.Dropout(dropout)
-        )
-        # LSTM layers
-        self.lstm = nn.LSTM(
-            input_size=num_filters, # takes CNN output
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=lstm_dropout if num_layers > 1 else 0
-        )
-        # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
-        self.fc = nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        # x is 3D tensor (batch_size, timesteps, features)
-        # CNN
-        x = x.permute(0, 2, 1) # (batch, features, timesteps)
-        x = self.cnn(x)
-        x = x.permute(0, 2, 1) # (batch, timesteps, num_filters)
-        # LSTM
-        lstmOutput, (hidden, cell) = self.lstm(x)
-        # lstmOutput: hidden state of EVERY timestep for the LAST layer only (batch_size, timesteps, hidden_size)
-        # hidden: final hidden state (LAST timestep) for EVERY layer (layers, batch_size, hidden_size)
-        # cell: similar to hidden but contains cell state instead of hidden state
-        # FC
-        lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
-        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
+ForexRNN, ForexHybrid = lstm.classBuilder()
 
 # HELPER FUNCTIONS: predict in batches to prevent vram overflow
 def batchPredict(model, X, batchSize=1024):
@@ -240,15 +179,9 @@ def objective(trial):
                 ).to(device)
 
         # LOSS FUNCTION AND OPTIMISER
-        classCounts = np.bincount(labels_train.astype(int)) # no. of each class
-        classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
-        classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
-        weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
-
-        criterion = nn.CrossEntropyLoss(weight=weightsTensor) # function to minimise
-        optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiserName]
-        optimiser = optimiserClass(model.parameters(), lr=learningRate, weight_decay=weightDecay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=5)
+        criterion, optimiser, scheduler, _ = lstm.optimiserBundle(model, labels_train, device,
+                                                               optimiserName, learningRate,
+                                                               weightDecay, schedulerPatience)
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned
@@ -256,7 +189,7 @@ def objective(trial):
         # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
         # for early stopping
-        bestValF1 = 0
+        bestValLoss = 100
         badEpochs = 0
         bestModelState = None
 
@@ -275,21 +208,20 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valPreds = batchPredict(model, X_fold_val)
-            valF1Score = f1_score(foldValTrue, valPreds, average="macro", zero_division=0)
+                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
 
             # check for early stopping
-            if valF1Score >= bestValF1:
-                bestValF1 = valF1Score
+            if valLoss <= bestValLoss:
+                bestValLoss = valLoss
                 badEpochs = 0
                 bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
             else:
                 badEpochs += 1
-                if badEpochs >= 15:
+                if badEpochs >= earlyStoppingPatience:
                     break
             
             # tune learning rate down if plateauing
-            scheduler.step(valF1Score)
+            scheduler.step(valLoss)
         # restore best model
         if bestModelState is not None:
             model.load_state_dict(bestModelState)

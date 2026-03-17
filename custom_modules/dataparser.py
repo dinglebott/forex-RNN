@@ -54,12 +54,11 @@ def parseData(jsonPath):
     df["open"] = df["close_smooth"] + (df["open"] - df["close"])
     df["high"] = df["close_smooth"] + (df["high"] - df["close"])
     df["low"] = df["close_smooth"] + (df["low"] - df["close"])
+    #df["close_smooth"] = df["close"]
 
     # ADD FEATURES
     # helper
     def getEma(period):
-        return df["close"].ewm(span=period, adjust=False).mean()
-    def getEmaSmooth(period):
         return df["close_smooth"].ewm(span=period, adjust=False).mean()
     # Raw
     df["open_return"] = (df["open"] / df["close_smooth"].shift(1)) - 1
@@ -78,6 +77,7 @@ def parseData(jsonPath):
         (df["low"]  - df["close_smooth"].shift(1)).abs()
     ], axis=1).max(axis=1) # greatest of 3 values
     df["atr_14"] = trueRange.rolling(14).mean() / df["close_smooth"]
+    df["raw_atr"] = trueRange.rolling(14).mean() / df["close"]
     df["volatility_regime"] = df["atr_14"] / df["atr_14"].rolling(50).mean()
     # Bollinger bands
     bb_mid = df["close_smooth"].rolling(20).mean()
@@ -93,8 +93,8 @@ def parseData(jsonPath):
     df["lower_wick"] = (df[["open", "close_smooth"]].min(axis=1) - df["low"]) / df["atr_14"]
     # EMAs
     for period in (15, 50):
-        df[f"raw_ema{period}"] = getEmaSmooth(period)
-        df[f"normalised_ema{period}"] = (df["close"] / df[f"raw_ema{period}"]) - 1
+        df[f"raw_ema{period}"] = getEma(period)
+        df[f"normalised_ema{period}"] = (df["close_smooth"] / df[f"raw_ema{period}"]) - 1
     df["ema_cross"] = df["normalised_ema15"] - df["normalised_ema50"]
     # RSI
     def rsi(series, n=14):
@@ -103,7 +103,7 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close"])
+    df["rsi_14"] = rsi(df["close_smooth"])
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
@@ -117,8 +117,8 @@ def parseData(jsonPath):
     # TARGET VARIABLE
     df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
     conditions = [
-        df["forward_return"] < -0.48 * df["atr_14"], # downward move
-        df["forward_return"] > 0.48 * df["atr_14"] # upward move
+        df["forward_return"] < -0.5 * df["raw_atr"], # downward move
+        df["forward_return"] > 0.5 * df["raw_atr"] # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
