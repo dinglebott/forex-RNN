@@ -12,7 +12,7 @@
         "num_layers": 1,
         "dropout": 0.38071913778937205,
         "lookback": 20,
-        "optimiser": "RMSprop",
+        "optimiser": "Adam",
         "lr": 0.00047171559401035934,
         "weight_decay": 0.0016216128628421813,
         "batch_size": 256,

@@ -180,8 +180,7 @@ def objective(trial):
 
         # LOSS FUNCTION AND OPTIMISER
         criterion, optimiser, scheduler, _ = lstm.optimiserBundle(model, labels_train, device,
-                                                               optimiserName, learningRate,
-                                                               weightDecay, schedulerPatience)
+                                                                  optimiserName, learningRate, weightDecay)
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned

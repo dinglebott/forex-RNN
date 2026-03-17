@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=5):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
     #classWeights = np.array([1.15, 1.0, 1.25])
@@ -24,7 +24,7 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
 
         def forward(self, logits, targets):
             probs = torch.softmax(logits, dim=1)
-            costs = self.cost_matrix[targets]       
+            costs = self.cost_matrix[targets]
             cost_weighted_probs = (costs * probs).sum(dim=1)
             ce = F.cross_entropy(logits, targets, weight=self.class_weights, reduction="none")
             loss = (ce * cost_weighted_probs).mean()

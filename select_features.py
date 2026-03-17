@@ -28,7 +28,6 @@ numFilters = 128
 kernelSize = 7
 # other
 epochs = 80 # early stopping implemented
-schedulerPatience = 5
 earlyStoppingPatience = 20
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
@@ -131,8 +130,7 @@ match arch:
 
 # LOSS FUNCTION AND OPTIMISER
 criterion, optimiser, scheduler, _ = lstm.optimiserBundle(model, labels_train, device,
-                                                       optimiserName, learningRate,
-                                                       weightDecay, schedulerPatience)
+                                                          optimiserName, learningRate, weightDecay)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned

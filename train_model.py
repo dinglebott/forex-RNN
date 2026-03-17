@@ -139,8 +139,7 @@ match arch:
 
 # LOSS FUNCTION AND OPTIMISER
 criterion, optimiser, scheduler, classWeights = lstm.optimiserBundle(model, labels_train, device,
-                                                       optimiserName, learningRate,
-                                                       weightDecay, schedulerPatience)
+                                                                     optimiserName, learningRate, weightDecay)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
