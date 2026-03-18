@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 import copy
 from sklearn.metrics import f1_score
 import os
@@ -14,28 +14,29 @@ instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 384 # no. of neurons in hidden state
-numLayers = 2 # no. of layers in the LSTM
+hiddenSize = 64 # no. of neurons in hidden state
+numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.5 # equivalent of subsample for RNN
-lookback = 20
-optimiserName = "Adam"
-learningRate = 1e-4
-weightDecay = 1e-5
-batchSize = 512
+lookback = 25
+optimiserName = "AdamW"
+learningRate = 3e-4
+weightDecay = 5e-3
+batchSize = 256
 clipGradNorm = 4.5
 # CNN params
-numFilters = 128
-kernelSize = 7
+numFilters = 16
+kernelSize = 3
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 20
-featureList = ["return", "return_4", "log_return", "log_return_4",
-               "atr_14", "volatility_regime",
-               "bb_width", "bb_position",
-               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-               "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
-               "open_return", "high_return", "low_return", "close_return"]
+earlyStoppingPatience = 15
+featureList = [
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "noise",
+    "atr_14", "volatility_regime",
+    "bb_width", "bb_position",
+    "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
+]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -74,7 +75,7 @@ labels_val = labels.iloc[valSplitIdx:splitIdx].values
 labels_test = labels.iloc[splitIdx:].values
 
 # SCALE FEATURES
-scaler = MinMaxScaler()
+scaler = StandardScaler()
 features_train = scaler.fit_transform(features_train)
 features_val = scaler.transform(features_val) # avoid fitting on val/test to prevent data leakage
 features_test = scaler.transform(features_test)
@@ -138,7 +139,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for early stopping and saving best model
-bestValLoss = 100
+bestCostScore = 0
 badEpochs = 0
 bestModelState = None
 
@@ -164,11 +165,12 @@ for epoch in range(epochs):
         valLoss = criterion(valLogits, y_val).item()
         valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
-    print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.5f} | Val loss: {valLoss:.5f} | Val F1: {valF1Score:.5f}")
+    valCostScore = lstm.costScore(valTrue, valPreds)
+    print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.4f} | Val loss: {valLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
 
     # check for early stopping
-    if valLoss <= bestValLoss:
-        bestValLoss = valLoss
+    if valCostScore >= bestCostScore:
+        bestCostScore = valCostScore
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
@@ -177,8 +179,8 @@ for epoch in range(epochs):
             print("EARLY STOPPING NOW")
             break
     
-    # tune learning rate down if plateauing
-    scheduler.step(valF1Score)
+    # tune learning rate down
+    scheduler.step(valCostScore)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)
@@ -191,7 +193,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
     testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions
     
 # EVALUATE MODEL
-f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
+costScore = lstm.costScore(testTrue, testPreds)
 
 # GET PERMUTATION IMPORTANCES
 model.eval()
@@ -211,12 +213,12 @@ for featureIdx in range(numFeatures):
             probs = torch.softmax(logits, dim=1)
             preds = torch.argmax(probs, dim=1).cpu().numpy()
         # record score for this iteration
-        score = f1_score(testTrue, preds, average="macro", zero_division=0)
+        score = lstm.costScore(testTrue, preds)
         scores.append(score)
     # average score for this feature
     avgScore = np.mean(scores)
     # calculate how much the model was hurt by shuffling this feature
-    importances.append(f1Score - avgScore)
+    importances.append(costScore - avgScore)
 
 # display results
 importances = pd.DataFrame({

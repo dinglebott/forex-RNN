@@ -3,7 +3,7 @@ from custom_modules import dataparser, lstm
 import torch
 import torch.nn as nn
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
 from sklearn.metrics import f1_score
@@ -43,15 +43,16 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 12
+numFeatures = 21
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
-# extract top n features into list
+# extract top n/positive features into list
 featureList = list(rawFeatures.keys())[:numFeatures]
-print(f"Best {numFeatures} features:", featureList)
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0]
+print(f"Best {len(featureList)} features:", featureList)
 
 features = df[featureList]
 labels = df["target"]
@@ -72,7 +73,7 @@ labels_train = labels.iloc[:splitIdx].values # convert to numpy array for correc
 labels_test = labels.iloc[splitIdx:].values
 
 # SCALE FEATURES
-scaler = MinMaxScaler()
+scaler = StandardScaler()
 features_train = scaler.fit_transform(features_train)
 features_test = scaler.transform(features_test) # dont fit on test data
 
@@ -123,20 +124,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [128, 200, 256, 300, 384, 512]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128, 256]),
         "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
     }
     dropout = trial.suggest_float("dropout", 0.3, 0.6) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
     lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
-    optimiserName = trial.suggest_categorical("optimiser", ["Adam", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-5, 1e-3)
+    optimiserName = trial.suggest_categorical("optimiser", ["AdamW", "RMSprop"])
+    learningRate = trial.suggest_float("lr", 1e-5, 5e-3)
     weightDecay = trial.suggest_float("weight_decay", 1e-5, 5e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [256, 512, 768, 1024])
+    batchSize = trial.suggest_categorical("batch_size", [128, 256, 512, 768])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [32, 64, 96, 128])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
+        numFilters = trial.suggest_categorical("num_filters", [16, 32, 64, 128])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -146,8 +147,9 @@ def objective(trial):
     testTrue = y_test.cpu().numpy() # transfer to cpu for F1 score later
 
     # SUBFOLD LOOP
-    scores = []
+    testScores = []
     trainScores = []
+    f1Scores = []
     for trainIdxs, valIdxs in trainValSplit.split(X_train):
         # SPLIT TRAIN AND VALIDATION SETS
         purgedTrainIndexes = trainIdxs[:-4] # prevent leaking from candlesAhead
@@ -188,7 +190,7 @@ def objective(trial):
         # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
         # for early stopping
-        bestValLoss = 100
+        bestCostScore = 0
         badEpochs = 0
         bestModelState = None
 
@@ -207,11 +209,12 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
+                valPreds = batchPredict(model, X_fold_val)
+                valCostScore = lstm.costScore(foldValTrue, valPreds)
 
             # check for early stopping
-            if valLoss <= bestValLoss:
-                bestValLoss = valLoss
+            if valCostScore >= bestCostScore:
+                bestCostScore = valCostScore
                 badEpochs = 0
                 bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
             else:
@@ -220,7 +223,7 @@ def objective(trial):
                     break
             
             # tune learning rate down if plateauing
-            scheduler.step(valLoss)
+            scheduler.step(valCostScore)
         # restore best model
         if bestModelState is not None:
             model.load_state_dict(bestModelState)
@@ -232,19 +235,24 @@ def objective(trial):
             foldTrainPreds = batchPredict(model, X_fold_train) # check for overfitting
 
         # EVALUATE MODEL
-        f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
-        scores.append(f1Score)
-        trainF1Score = f1_score(foldTrainTrue, foldTrainPreds, average="macro", zero_division=0)
-        trainScores.append(trainF1Score)
+        costScore = lstm.costScore(testTrue, testPreds)
+        testScores.append(costScore)
+        trainCostScore = lstm.costScore(foldTrainTrue, foldTrainPreds)
+        trainScores.append(trainCostScore)
+        f1 = f1_score(testTrue, testPreds, average="macro", zero_division=0)
+        f1Scores.append(f1)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Train F1: {np.mean(trainScores):.5f} | Test F1: {np.mean(scores):.5f}")
-    # return score to study object
-    return np.mean(scores)
+    print(f"Trial {trial.number} | Train: {np.mean(trainScores):.4f} | Test: {np.mean(testScores):.4f} | F1: {np.mean(f1Scores):.4f}")
+    # penalise class collapse
+    predCounts = np.bincount(testPreds, minlength=3) # count per class
+    predFreqs = predCounts / predCounts.sum() # sum counts to 1
+    collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class appears more than 50% of the time
+    return np.mean(testScores) - 2 * collapsePenalty
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=50, show_progress_bar=True)
+study.optimize(objective, n_trials=100, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

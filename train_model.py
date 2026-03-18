@@ -4,7 +4,7 @@ import torch.nn as nn
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 import copy
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 import os
@@ -48,7 +48,7 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 12
+numFeatures = 21
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
@@ -56,6 +56,7 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
 featureList = list(rawFeatures.keys())[:numFeatures]
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0]
 print(f"Best {numFeatures} features:", featureList)
 
 features = df[featureList]
@@ -82,7 +83,7 @@ labels_val = labels.iloc[valSplitIdx:splitIdx].values
 labels_test = labels.iloc[splitIdx:].values
 
 # SCALE FEATURES
-scaler = MinMaxScaler()
+scaler = StandardScaler()
 features_train = scaler.fit_transform(features_train)
 features_val = scaler.transform(features_val) # avoid fitting on val/test to prevent data leakage
 features_test = scaler.transform(features_test)
@@ -201,6 +202,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
     
 # EVALUATE MODEL
 accuracy = accuracy_score(testTrue, testPreds)*100
+costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
@@ -211,6 +213,7 @@ cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Accuracy: {accuracy:.3f}%")
+print(f"Cost score: {costScore:.3f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")

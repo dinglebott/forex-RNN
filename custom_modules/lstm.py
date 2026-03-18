@@ -1,21 +1,33 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from sklearn.metrics import confusion_matrix
+
+pen = 1.2
+penMatrix = torch.tensor([
+    [2 - pen, 1.0, pen],
+    [1.0, 1.0, 1.0],
+    [pen, 1.0, 2 - pen],
+], dtype=torch.float32, device="cpu")
+penMatrixNp = penMatrix.numpy()
+
+def costScore(y_true, y_preds):
+    cm = confusion_matrix(y_true, y_preds, labels=[0, 1, 2]).astype(float) # 3x3 numpy array (real, predicted)
+    cm /= cm.sum() # still 3x3 but now sums to 1
+    cost = (cm * penMatrixNp).sum() # elementwise multiply by costs, then sum to scalar value
+
+    classFreqs = cm.sum(axis=1)
+    bestCase = (classFreqs * penMatrixNp.diagonal()).sum() # all minimum multipliers
+    worstCase = (classFreqs * np.fliplr(penMatrixNp).diagonal()).sum() # all maximum multipliers
+    score = 1 - ((cost - bestCase) / (worstCase - bestCase)) # normalise to 0-1 (1 is best)
+    return score
 
 def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=5):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
-    classWeights = 1.0 / np.sqrt(classCounts) # majority class => smaller weight and vice versa
-    #classWeights = np.array([1.15, 1.0, 1.25])
-    classWeights = (classWeights / classWeights.sum()) * len(classWeights)  # normalise
+    classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
+    classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
     weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
-
-    pen = 1.5
-    penMatrix = torch.tensor([
-        [0.0, 1.0, pen],
-        [1.0, 0.0, 1.0],
-        [pen, 1.0, 0.0],
-    ], dtype=torch.float32)
-
+    
     class CostSensitiveLoss(torch.nn.Module):
         def __init__(self, cost_matrix, class_weights):
             super().__init__()
@@ -23,17 +35,19 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
             self.class_weights = class_weights.to(device)
 
         def forward(self, logits, targets):
+            # logits: raw scores (batch_size, 3)
+            # targets: true classes (batch_size,)
             probs = torch.softmax(logits, dim=1)
-            costs = self.cost_matrix[targets]
-            cost_weighted_probs = (costs * probs).sum(dim=1)
-            ce = F.cross_entropy(logits, targets, weight=self.class_weights, reduction="none")
+            costs = self.cost_matrix[targets] # get respective cost row for each sample
+            cost_weighted_probs = (costs * probs).sum(dim=1) # multiply element-wise
+            ce = F.cross_entropy(logits, targets, weight=self.class_weights, reduction="none") # normal crossentropyloss
             loss = (ce * cost_weighted_probs).mean()
             return loss
 
     criterion = CostSensitiveLoss(penMatrix, weightsTensor) # function to minimise
-    optimiserClass = {"Adam": torch.optim.Adam, "RMSprop": torch.optim.RMSprop}[optimiser_name]
+    optimiserClass = {"AdamW": torch.optim.AdamW, "RMSprop": torch.optim.RMSprop}[optimiser_name]
     optimiser = optimiserClass(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, "max", factor=0.5, patience=scheduler_patience)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="max", factor=0.5, patience=scheduler_patience, min_lr=1e-6)
 
     return criterion, optimiser, scheduler, classWeights
 

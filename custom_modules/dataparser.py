@@ -48,54 +48,46 @@ def parseData(jsonPath):
     df = pd.DataFrame(records)
 
     # denoise
-    df["close_smooth"] = ultimateSmoother(df["close"])[:len(df)]
     df["volume"] = ultimateSmoother(df["volume"])[:len(df)]
-    # rebuild candle around smoothed close
-    df["open"] = df["close_smooth"] + (df["open"] - df["close"])
-    df["high"] = df["close_smooth"] + (df["high"] - df["close"])
-    df["low"] = df["close_smooth"] + (df["low"] - df["close"])
-    #df["close_smooth"] = df["close"]
-
+    df["volume"] = df["volume"].clip(lower=1e-10)
+    df["close_smooth"] = ultimateSmoother(df["close"])[:len(df)]
+    df["noise"] = np.log(df["close"] / df["close_smooth"])
+    
     # ADD FEATURES
     # helper
     def getEma(period):
-        return df["close_smooth"].ewm(span=period, adjust=False).mean()
+        return df["close"].ewm(span=period, adjust=False).mean()
     # Raw
-    df["open_return"] = (df["open"] / df["close_smooth"].shift(1)) - 1
-    df["high_return"] = (df["high"] / df["close_smooth"].shift(1)) - 1
-    df["low_return"] = (df["low"] / df["close_smooth"].shift(1)) - 1
-    df["close_return"] = (df["close_smooth"] / df["close_smooth"].shift(1)) - 1
-    # Returns
-    df["return"] = df["close_smooth"].pct_change()
-    df["return_4"] = df["close_smooth"].pct_change(4)
-    df["log_return"] = np.log(df["close_smooth"] / df["close_smooth"].shift(1)) # natural log (base e)
-    df["log_return_4"] = np.log(df["close_smooth"] / df["close_smooth"].shift(4))
+    df["open_return"] = np.log(df["open"] / df["close"].shift(1))
+    df["high_return"] = np.log(df["high"] / df["close"].shift(1))
+    df["low_return"] = np.log(df["low"] / df["close"].shift(1))
+    df["close_return"] = np.log(df["close"] / df["close"].shift(1))
+    df["vol_return"] = np.log(df["volume"] / df["volume"].shift(1))
     # ATR
     trueRange = pd.concat([
         df["high"] - df["low"],
-        (df["high"] - df["close_smooth"].shift(1)).abs(),
-        (df["low"]  - df["close_smooth"].shift(1)).abs()
+        (df["high"] - df["close"].shift(1)).abs(),
+        (df["low"]  - df["close"].shift(1)).abs()
     ], axis=1).max(axis=1) # greatest of 3 values
-    df["atr_14"] = trueRange.rolling(14).mean() / df["close_smooth"]
-    df["raw_atr"] = trueRange.rolling(14).mean() / df["close"]
+    df["atr_14"] = trueRange.rolling(14).mean() / df["close"]
     df["volatility_regime"] = df["atr_14"] / df["atr_14"].rolling(50).mean()
     # Bollinger bands
-    bb_mid = df["close_smooth"].rolling(20).mean()
-    bb_std = df["close_smooth"].rolling(20).std()
+    bb_mid = df["close"].rolling(20).mean()
+    bb_std = df["close"].rolling(20).std()
     bb_upper = bb_mid + 2 * bb_std
     bb_lower = bb_mid - 2 * bb_std
     df["bb_width"] = (bb_upper - bb_lower) / bb_mid
-    df["bb_position"] = (df["close_smooth"] - bb_lower) / (bb_upper - bb_lower)
+    df["bb_position"] = (df["close"] - bb_lower) / (bb_upper - bb_lower)
     # Structure
-    df["hl_spread"] = (df["high"] - df["low"]) / df["close_smooth"]
-    df["oc_spread"] = (df["close_smooth"] - df["open"]) / df["close_smooth"]
-    df["upper_wick"] = (df["high"] - df[["open", "close_smooth"]].max(axis=1)) / df["atr_14"]
-    df["lower_wick"] = (df[["open", "close_smooth"]].min(axis=1) - df["low"]) / df["atr_14"]
+    raw_atr = trueRange.rolling(14).mean()
+    df["hl_spread"] = np.log(df["high"] / df["low"])
+    df["oc_spread"] = np.log(df["close"] / df["open"])
+    df["upper_wick"] = (df["high"] - df[["open", "close"]].max(axis=1)) / raw_atr
+    df["lower_wick"] = (df[["open", "close"]].min(axis=1) - df["low"]) / raw_atr
     # EMAs
-    for period in (15, 50):
-        df[f"raw_ema{period}"] = getEma(period)
-        df[f"normalised_ema{period}"] = (df["close_smooth"] / df[f"raw_ema{period}"]) - 1
-    df["ema_cross"] = df["normalised_ema15"] - df["normalised_ema50"]
+    df["dist_ema15"] = np.log(df["close"] / getEma(15))
+    df["dist_ema50"] = np.log(df["close"] / getEma(50))
+    df["ema_cross"] = np.log(getEma(15) / getEma(50))
     # RSI
     def rsi(series, n=14):
         delta = series.diff()
@@ -103,11 +95,11 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close_smooth"])
+    df["rsi_14"] = rsi(df["close"])
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
-    df["macd_hist"] = macd - macd_signal
+    df["macd_hist"] = (macd - macd_signal) / df["close"]
     # Volume
     vol_sma30 = df["volume"].rolling(30).mean()
     df["vol_ratio"] = df["volume"] / vol_sma30
@@ -117,8 +109,8 @@ def parseData(jsonPath):
     # TARGET VARIABLE
     df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
     conditions = [
-        df["forward_return"] < -0.0015, # downward move
-        df["forward_return"] > 0.0015 # upward move
+        df["forward_return"] < -0.5 * raw_atr, # downward move
+        df["forward_return"] > 0.5 * raw_atr # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)
