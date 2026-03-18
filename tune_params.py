@@ -52,6 +52,7 @@ with open(filepath, "r") as file:
 # extract top n/positive features into list
 featureList = list(rawFeatures.keys())[:numFeatures]
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0]
+del featureList[14:]
 print(f"Best {len(featureList)} features:", featureList)
 
 features = df[featureList]
@@ -124,20 +125,20 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128, 256]),
-        "num_layers": trial.suggest_categorical("num_layers", [1, 2, 3])
+        "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
     dropout = trial.suggest_float("dropout", 0.3, 0.6) # for CNN
     lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
-    lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
+    lookback = trial.suggest_categorical("lookback", [15, 20, 25])
     optimiserName = trial.suggest_categorical("optimiser", ["AdamW", "RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-5, 5e-3)
+    learningRate = trial.suggest_float("lr", 1e-5, 8e-3, log=True)
     weightDecay = trial.suggest_float("weight_decay", 1e-5, 5e-3, log=True)
     batchSize = trial.suggest_categorical("batch_size", [128, 256, 512, 768])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [16, 32, 64, 128])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
+        numFilters = trial.suggest_categorical("num_filters", [8, 16, 32])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -181,8 +182,10 @@ def objective(trial):
                 ).to(device)
 
         # LOSS FUNCTION AND OPTIMISER
-        criterion, optimiser, scheduler, _ = lstm.optimiserBundle(model, labels_train, device,
-                                                                  optimiserName, learningRate, weightDecay)
+        criterion, optimiser, scheduler, _ = lstm.optimiserBundle(
+            model, labels_train, device,
+            optimiserName, learningRate, weightDecay
+        )
 
         # TRAIN MODEL
         dataset = torch.utils.data.TensorDataset(X_fold_train, y_fold_train) # Dataset object is a wrapper to keep tensors aligned
@@ -244,15 +247,12 @@ def objective(trial):
     
     # print train and test F1 for overfitting check
     print(f"Trial {trial.number} | Train: {np.mean(trainScores):.4f} | Test: {np.mean(testScores):.4f} | F1: {np.mean(f1Scores):.4f}")
-    # penalise class collapse
-    predCounts = np.bincount(testPreds, minlength=3) # count per class
-    predFreqs = predCounts / predCounts.sum() # sum counts to 1
-    collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class appears more than 50% of the time
-    return np.mean(testScores) - 2 * collapsePenalty
+
+    return np.mean(testScores)
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=100, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

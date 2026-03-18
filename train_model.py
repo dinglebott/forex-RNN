@@ -139,8 +139,10 @@ match arch:
         ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-criterion, optimiser, scheduler, classWeights = lstm.optimiserBundle(model, labels_train, device,
-                                                                     optimiserName, learningRate, weightDecay)
+criterion, optimiser, scheduler, classWeights = lstm.optimiserBundle(
+    model, labels_train, device,
+    optimiserName, learningRate, weightDecay
+)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
@@ -157,7 +159,7 @@ def batchPredict(model, X, batchSize=1024):
     return np.concatenate(allPreds)
 
 # for early stopping and saving best model
-bestValLoss = 100
+bestCostScore = 100
 badEpochs = 0
 bestModelState = None
 
@@ -177,17 +179,21 @@ for _ in range(epochs):
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
-        valLoss = criterion(valLogits, y_val).item()
+        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy()
+    valCostScore = lstm.costScore(valTrue, valPreds)
 
     # check for early stopping
-    if valLoss <= bestValLoss:
-        bestValLoss = valLoss
+    if valCostScore >= bestCostScore:
+        bestCostScore = valCostScore
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
         badEpochs += 1
         if badEpochs >= earlyStoppingPatience:
             break
+    
+    # tune learning rate down
+    scheduler.step(valCostScore)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)
@@ -206,6 +212,7 @@ costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
+total, trainable = lstm.numParams(model)
 
 # CONFUSION MATRIX
 cmatrix = confusion_matrix(testTrue, testPreds)
@@ -218,7 +225,7 @@ print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
-print(f"\nClass weights: {classWeights}")
+print(f"\nModel size: {trainable}")
 
 # SAVE MODEL
 directory = "models"

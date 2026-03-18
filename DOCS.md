@@ -70,7 +70,7 @@ Probability of each class as predicted by an XGBoost model\
 `num_layers`: [1, 2, 3]\
 `dropout`: 0.1 - 0.5\
 `lookback`: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]\
-`optimiserName`: ["Adam", "RMSprop"]\
+`optimiserName`: ["AdamW", "RMSprop"]\
 `learningRate`: 1e-4 - 1e-2\
 `weightDecay`: 1e-6 - 1e-3\
 `batchSize`: [64, 128, 256, 512]\
@@ -83,6 +83,7 @@ Probability of each class as predicted by an XGBoost model\
 **Explanation of metrics:**\
 Negative = 0, Flat = 1, Positive = 2\
 Accuracy (0-100) => (Correct predictions / Total predictions) * 100%\
+Cost score (0-1) => Cost-weighted score (penalises wrong-direction predictions more)
 F1 score (0-1) => Harmonic mean of Precision and Recall\
 F1 score (macro-averaged) => Unweighted mean of F1 score calculated for each class (1 and 0)\
 ROC-AUC score (0-1) => Probability that a randomly chosen 1 is ranked higher than a randomly chosen 0 by the model\

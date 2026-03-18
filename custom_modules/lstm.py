@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 
-pen = 1.2
+pen = 1.1
 penMatrix = torch.tensor([
     [2 - pen, 1.0, pen],
     [1.0, 1.0, 1.0],
@@ -16,13 +16,16 @@ def costScore(y_true, y_preds):
     cm /= cm.sum() # still 3x3 but now sums to 1
     cost = (cm * penMatrixNp).sum() # elementwise multiply by costs, then sum to scalar value
 
-    classFreqs = cm.sum(axis=1)
+    classFreqs = cm.sum(axis=1) # true distribution
     bestCase = (classFreqs * penMatrixNp.diagonal()).sum() # all minimum multipliers
     worstCase = (classFreqs * np.fliplr(penMatrixNp).diagonal()).sum() # all maximum multipliers
     score = 1 - ((cost - bestCase) / (worstCase - bestCase)) # normalise to 0-1 (1 is best)
-    return score
+    # penalise collapse
+    predFreqs = cm.sum(axis=0) # prediction distribution
+    collapsePenalty = max(0, predFreqs.max() - 0.5)
+    return score - 3 * collapsePenalty
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=5):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=10):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
@@ -84,9 +87,6 @@ def classBuilder():
                 torch.nn.Conv1d(in_channels=input_size, out_channels=num_filters,
                         kernel_size=kernel_size, padding=kernel_size//2),
                 torch.nn.ReLU(),
-                torch.nn.Conv1d(in_channels=num_filters, out_channels=num_filters,
-                            kernel_size=kernel_size, padding=kernel_size//2),
-                torch.nn.ReLU(),
                 torch.nn.BatchNorm1d(num_filters), # normalise before passing to LSTM
                 torch.nn.Dropout(dropout)
             )
@@ -117,3 +117,8 @@ def classBuilder():
             return self.fc(lastTimestep) # map to prediction (batch_size, output size)
     
     return ForexRNN, ForexHybrid
+
+def numParams(model):
+    total = sum(p.numel() for p in model.parameters()) # total no. of elements
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return total, trainable

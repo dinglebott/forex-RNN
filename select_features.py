@@ -14,15 +14,15 @@ instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 64 # no. of neurons in hidden state
+hiddenSize = 128 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.5 # equivalent of subsample for RNN
-lookback = 25
+lookback = 15
 optimiserName = "AdamW"
 learningRate = 3e-4
-weightDecay = 5e-3
-batchSize = 256
-clipGradNorm = 4.5
+weightDecay = 5e-4
+batchSize = 512
+clipGradNorm = 5.0
 # CNN params
 numFilters = 16
 kernelSize = 3
@@ -130,8 +130,10 @@ match arch:
         ).to(device)
 
 # LOSS FUNCTION AND OPTIMISER
-criterion, optimiser, scheduler, _ = lstm.optimiserBundle(model, labels_train, device,
-                                                          optimiserName, learningRate, weightDecay)
+criterion, optimiser, scheduler, _ = lstm.optimiserBundle(
+    model, labels_train, device,
+    optimiserName, learningRate, weightDecay
+)
 
 # TRAIN MODEL
 dataset = torch.utils.data.TensorDataset(X_train, y_train) # Dataset object is a wrapper to keep tensors aligned
