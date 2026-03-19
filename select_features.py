@@ -14,21 +14,21 @@ instrument = "EUR_USD"
 granularity = "H4"
 arch = 1 # 0 for LSTM, 1 for CNN/LSTM
 # hyperparameters
-hiddenSize = 64 # no. of neurons in hidden state
+hiddenSize = 256 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.3 # equivalent of subsample for RNN
-lookback = 15
-optimiserName = "AdamW"
-learningRate = 1e-3
-weightDecay = 1e-3
-batchSize = 64
-clipGradNorm = 5.0
+dropOut = 0.336 # equivalent of subsample for RNN
+lookback = 20
+optimiserName = "RMSprop"
+learningRate = 3.3644190650341536e-06
+weightDecay = 0.00013486208588007857
+batchSize = 128
+clipGradNorm = 2.6798100865282204
 # CNN params
-numFilters = 32
-kernelSize = 3
+numFilters = 64
+kernelSize = 9
 # other
-epochs = 80 # early stopping implemented
-earlyStoppingPatience = 20
+epochs = 120 # early stopping implemented
+earlyStoppingPatience = 25
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
