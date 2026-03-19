@@ -1,0 +1,18 @@
+{
+    "features": [
+        "atr_14",
+        "volatility_regime",
+        "bb_width",
+        "hl_spread",
+        "ema_cross",
+        "lower_wick",
+        "high_return",
+        "dist_ema50",
+        "smooth_return",
+        "low_return",
+        "vol_ratio",
+        "open_return",
+        "macd_hist",
+        "upper_wick"
+    ]
+}

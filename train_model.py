@@ -54,9 +54,8 @@ filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
-
 features = df[featureList]
 labels = df["target"]
 
@@ -218,7 +217,7 @@ cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Accuracy: {accuracy:.3f}%")
-print(f"Cost score: {costScore:.3f}")
+print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")

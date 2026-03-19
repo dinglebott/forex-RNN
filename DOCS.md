@@ -94,6 +94,37 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 4.1
+*Changes from v4: Broaden model (hidden_size)*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["atr_14", "volatility_regime", "bb_width", "hl_spread", "ema_cross", "lower_wick", "high_return", "dist_ema50", "smooth_return", "low_return", "vol_ratio", "open_return", "macd_hist", "upper_wick"]\
+**Hyperparameters:**\
+hidden_size: 192\
+num_layers: 1\
+dropout: 0.45002\
+lookback: 25\
+optimiser: RMSprop\
+lr: 2.1275e-6\
+weight_decay: 8.6635e-4\
+batch_size: 256\
+clip_grad_norm: 4.4553\
+num_filters: 32\
+kernel_size: 5\
+**Cost matrix parameters:** 1.4, 0.1\
+**Accuracy:** 39.934%\
+**Cost score:** 0.56800\
+**F1 score (macro-averaged):** 0.39570\
+**Train F1 score:** 0.35407\
+**ROC-AUC score:** 0.56472\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 150 | 161 | 148 |
+| Real ~ | 137 | 242 | 168 |
+| Real + | 104 | 198 | 217 |
+<br/>
+
 ### Model 4
 *Changes from v3: Implement cost-sensitive score and loss function, reduce model complexity*\
 **Train:** 2005 - 2024\
@@ -113,7 +144,7 @@ num_filters: 32\
 kernel_size: 7\
 **Cost matrix parameters:** 1.3, 0.1\
 **Accuracy:** 36.808%\
-**Cost score:** 0.5540\
+**Cost score:** 0.554\
 **F1 score (macro-averaged):** 0.36635\
 **Train F1 score:** 0.35241\
 **ROC-AUC score:** 0.54647\

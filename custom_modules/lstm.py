@@ -26,7 +26,7 @@ def costScore(y_true, y_preds):
     collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class above 0.5
     return score - collapsePenalty
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=10):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=15):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise

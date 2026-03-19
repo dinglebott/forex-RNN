@@ -49,9 +49,8 @@ filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
-
 features = df[featureList]
 labels = df["target"]
 
@@ -122,19 +121,19 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [64, 96, 128, 192, 256]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [128, 192, 256]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.3, 0.5) # for CNN
-    lookback = trial.suggest_categorical("lookback", [15, 20, 25])
+    dropout = trial.suggest_float("dropout", 0.45, 0.55) # for CNN
+    lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-6, 1e-4, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3)
-    batchSize = trial.suggest_categorical("batch_size", [128, 192, 256])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 2.0, 5.0)
+    learningRate = trial.suggest_float("lr", 5e-7, 1e-5, log=True)
+    weightDecay = trial.suggest_float("weight_decay", 1e-4, 4e-3)
+    batchSize = trial.suggest_categorical("batch_size", [192, 256, 384, 512])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 3.5, 5.5)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [24, 32, 48, 64, 96])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
+        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32, 48, 64])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # CREATE SEQUENCES (already converted to tensors by function)
@@ -249,7 +248,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=100, show_progress_bar=True)
+study.optimize(objective, n_trials=60, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

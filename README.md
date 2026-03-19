@@ -6,6 +6,7 @@ LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which perfor
 *See DOCS.md for detailed results and workflow*\
 <br/>
 Part 1: [trading-trees](https://github.com/dinglebott/trading-trees), using a tree-based architecture (XGBoost)\
+Part 3: [money-meta](https://github.com/dinglebott/money-meta), ensembling models from parts 1 and 2
 
 ## Outline of methodology
 Phase 1: Fetch historical data in `fetch_data.py`\
@@ -16,14 +17,11 @@ Phase 4: Train final model and evaluate (using features and hyperparameters from
 
 ## Project structure
 The main code is all in the top-level scripts.\
-The `custom_modules` folder contains helper functions to fetch and manipulate the data.\
-It also contains a fully-trained XGBoost model and a script to produce leak-free XGBoost predictions
+The `custom_modules` folder contains helper functions to fetch and manipulate the data.
 
 ## How to build a model
 The top-level scripts contain global variables for the current year, the desired instrument, and granularity. I built my model for 2026 EUR/USD at H4 granularity. For other options, set these to the appropriate values.\
-If training a different model, first train an appropriate XGBoost model using the framework in [trading-trees](https://github.com/dinglebott/trading-trees).\
-Then paste the JSON file into the `custom_modules` folder, and edit the filepath accordingly in the `trainedXgbFilepath` variable at the top of the `xgboost_trainer.py` module.\
-Once the model is trained, manually write the `features_vX.json` and `hyperparameters_vX.json` to the models folder (i will automate it when i'm not lazy one day).\
+Once the model is trained, rewrite `features.json` in the `results` folder to match the format you see (sorry about that). Also, rename `features.json` and `hyperparameters.json` with the version number like you see too.\
 Output for all phases is printed to the terminal, and the final model is automatically saved as a JSON file.
 #### IMPORTANT:
 You need an OANDA API key to pull historical data (or you can use the data I pulled already).\
