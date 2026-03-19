@@ -48,16 +48,14 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-numFeatures = 21
 directory = "results"
 filename = "features.json"
 filepath = os.path.join(directory, filename)
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = list(rawFeatures.keys())[:numFeatures]
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0]
-print(f"Best {numFeatures} features:", featureList)
+print(f"Best {len(featureList)} features:", featureList)
 
 features = df[featureList]
 labels = df["target"]

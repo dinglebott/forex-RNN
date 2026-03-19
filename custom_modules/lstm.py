@@ -3,11 +3,12 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 
-pen = 1.1
+pen = 1.3 # pen <= 2.0
+pen2 = 0.1 # pen2 <= pen - 1
 penMatrix = torch.tensor([
-    [2 - pen, 1.0, pen],
-    [1.0, 1.0, 1.0],
-    [pen, 1.0, 2 - pen],
+    [2.0 - pen, 1.0 - pen2, pen + pen2],
+    [1.0 + pen2/2, 1.0 - pen2, 1.0 + pen2/2],
+    [pen + pen2, 1.0 - pen2, 2.0 - pen],
 ], dtype=torch.float32, device="cpu")
 penMatrixNp = penMatrix.numpy()
 
@@ -22,8 +23,8 @@ def costScore(y_true, y_preds):
     score = 1 - ((cost - bestCase) / (worstCase - bestCase)) # normalise to 0-1 (1 is best)
     # penalise collapse
     predFreqs = cm.sum(axis=0) # prediction distribution
-    collapsePenalty = max(0, predFreqs.max() - 0.5)
-    return score - 3 * collapsePenalty
+    collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class above 0.5
+    return score - collapsePenalty
 
 def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=10):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
@@ -42,9 +43,9 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
             # targets: true classes (batch_size,)
             probs = torch.softmax(logits, dim=1)
             costs = self.cost_matrix[targets] # get respective cost row for each sample
-            cost_weighted_probs = (costs * probs).sum(dim=1) # multiply element-wise
-            ce = F.cross_entropy(logits, targets, weight=self.class_weights, reduction="none") # normal crossentropyloss
-            loss = (ce * cost_weighted_probs).mean()
+            cost_weighted_probs = (costs * probs).sum(dim=1) # multiply each probability by respective coeff, sum to scalar per sample
+            ce = F.cross_entropy(logits, targets, weight=self.class_weights, reduction="none") # normal crossentropyloss, per sample loss
+            loss = (ce * cost_weighted_probs).mean() # apply multiplier to standard loss (random: 1.0)
             return loss
 
     criterion = CostSensitiveLoss(penMatrix, weightsTensor) # function to minimise

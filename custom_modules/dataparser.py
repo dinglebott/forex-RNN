@@ -51,7 +51,8 @@ def parseData(jsonPath):
     df["volume"] = ultimateSmoother(df["volume"])[:len(df)]
     df["volume"] = df["volume"].clip(lower=1e-10)
     df["close_smooth"] = ultimateSmoother(df["close"])[:len(df)]
-    df["noise"] = np.log(df["close"] / df["close_smooth"])
+    # smoothed features
+    df["smooth_return"] = np.log(df["close_smooth"] / df["close_smooth"].shift(1))
     
     # ADD FEATURES
     # helper

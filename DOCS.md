@@ -91,6 +91,37 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 4
+*Changes from v3: Implement cost-sensitive score and loss function, reduce model complexity*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["close_return", "dist_ema50", "macd_hist", "smooth_return", "upper_wick", "lower_wick", "atr_14", "rsi_14", "low_return", "dist_ema15"]\
+**Hyperparameters:**\
+hidden_size: 32\
+num_layers: 1\
+dropout: 0.36370\
+lookback: 15\
+optimiser: RMSprop\
+lr: 2.9658e-5\
+weight_decay: 5.9564e-4\
+batch_size: 64\
+clip_grad_norm: 3.9427\
+num_filters: 32\
+kernel_size: 7\
+**Cost matrix parameters:** 1.3, 0.1\
+**Accuracy:** 36.808%\
+**Cost score:** 0.5540\
+**F1 score (macro-averaged):** 0.36635\
+**Train F1 score:** 0.35241\
+**ROC-AUC score:** 0.54647\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 154 | 172 | 140 |
+| Real ~ | 155 | 222 | 172 |
+| Real + |121 | 210 | 189 |
+<br/>
+
 ### Model 3 (invalid: data leaked in wavelet deconstruction)
 *Changes from v2: Implement wavelet de-noising, minimum probability threshold for flat class, and class weighting*\
 **Train:** 2005 - 2024\
