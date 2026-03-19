@@ -22,22 +22,25 @@ Test: 2025\
 **Scoring metric:** Permutation importances\
 Each feature is shuffled randomly across all the samples of the test set, effectively turning it into garbage data. The impact on the model's F1 score when predicting the test set is then measured. The process is repeated for every feature and the scores are compared.\
 **Price:**\
-Return => Percentage change from previous close\
-4-period return => Percentage change from close 4 candles prior\
-Log return => ln(close / previous close)
-4-period log return => ln(close / close 4 candles prior)
+Open return => ln(O / previous C)\
+High return => ln(H / previous C)\
+Low return => ln(L / previous C)\
+Close return => ln(C / previous C)\
+Volume return => ln(V / previous V)\
+Smooth return => ln(smoothed C / previous smoothed C)
+*Volume and smoothed C have been smoothed by Ehler's UltimateSmoother algorithm*\
 **Structure:**\
-High-low spread (normalised) => (H - L) / C\
-Open-close spread (normalised) => (C - O) / C\
+High-low spread => ln(H - L)\
+Open-close spread => ln(C - O)\
 Upper wick => (High - candle top) / atr_14\
 Lower wick => (Candle bottom - low) / atr_14\
 **Trend:**\
-15-period EMA (normalised) => (C / EMA) - 1\
-50-period EMA (normalised) => (C / EMA) - 1\
-EMA cross => ema15 - ema50\
+15-period EMA => ln(C / EMA)\
+50-period EMA => ln(C / EMA)\
+EMA cross => ln(ema15 / ema50)\
 **Momentum:**\
 14-period RSI\
-12/26/9-period MACD histogram => (ema12 - ema26) - signal\
+12/26/9-period MACD histogram => ((ema12 - ema26) - signal) / C\
 **Volatility:**\
 14-period ATR\
 Volatility regime => atr_14 / atr_14 50-period mean\

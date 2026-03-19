@@ -1,6 +1,6 @@
 ## About project
 Goal: Predict the direction of future price movements in forex markets by training a neural network\
-This is the next stage of the [trading-trees](https://github.com/dinglebott/trading-trees) project, which uses a tree-based model architecture to achieve the same goal.\
+See also [trading-trees](https://github.com/dinglebott/trading-trees) project, which uses a tree-based model architecture to achieve the same goal.\
 In this project I experiment with neural network architectures such as CNN and LSTM, potentially ensembling it with the XGBoost model built in [trading-trees](https://github.com/dinglebott/trading-trees).\
 <br/>
 CNN (Convolutional Neural Network) is a model that uses kernels to filter out local patterns in the data (~ 3 candles), and abstracts it into inputs for the LSTM to train on. It performs well in pattern recognition and spatial data.\
@@ -17,7 +17,7 @@ Phase 4: Train final model and evaluate (using features and hyperparameters from
 ## Project structure
 The main code is all in the top-level scripts.\
 The `custom_modules` folder contains helper functions to fetch and manipulate the data.\
-It also contains a fully-trained XGBoost model and a script to produce leak-free XGBoost predictions for the LSTM
+It also contains a fully-trained XGBoost model and a script to produce leak-free XGBoost predictions
 
 ## How to build a model
 The top-level scripts contain global variables for the current year, the desired instrument, and granularity. I built my model for 2026 EUR/USD at H4 granularity. For other options, set these to the appropriate values.\
@@ -35,4 +35,4 @@ Run `use_model.py`, the prediction and confidence will be printed to the termina
 Remember to set the correct global variables. Obviously make sure you have the correct model trained for your use case first.
 
 ## Why?????
-why am i still trying
+why am i still trying this is the hardest shit i've ever done
