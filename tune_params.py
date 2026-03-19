@@ -126,7 +126,6 @@ def objective(trial):
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
     dropout = trial.suggest_float("dropout", 0.3, 0.5) # for CNN
-    lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
     lookback = trial.suggest_categorical("lookback", [15, 20, 25])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
     learningRate = trial.suggest_float("lr", 1e-6, 1e-4, log=True)
@@ -136,6 +135,7 @@ def objective(trial):
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [24, 32, 48, 64, 96])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7, 9])
+        lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
@@ -258,12 +258,10 @@ hyperparameters = {
         "hidden_size": study.best_params["hidden_size"],
         "num_layers": study.best_params["num_layers"],
         "dropout": study.best_params["dropout"],
-        "num_filters": study.best_params["num_filters"],
-        "kernel_size": study.best_params["kernel_size"]
+        "num_filters": study.best_params["num_filters"] if arch == 1 else None,
+        "kernel_size": study.best_params["kernel_size"] if arch == 1 else None
     },
-
     "lookback": study.best_params["lookback"],
-
     "allParams": study.best_params
 }
 directory = "results"

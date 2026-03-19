@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import joblib
-from custom_modules import datafetcher, dataparser
+from custom_modules import datafetcher, dataparser, lstm
 import numpy as np
 import os
 import json
@@ -10,49 +10,14 @@ import json
 yearNow = 2026
 instrument = "EUR_USD"
 granularity = "H4"
-version = 3
+arch = 1 # 0 for LSTM, 1 for CNN/LSTM
+version = 4
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # BUILD MODEL
-class ForexHybrid(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, dropout, lstm_dropout, output_size,
-                 num_filters, kernel_size):
-        super(ForexHybrid, self).__init__()
-        # CNN layers: takes 3D tensor as input (batch_size, channels, length)
-        self.cnn = nn.Sequential(
-            nn.Conv1d(in_channels=input_size, out_channels=num_filters,
-                      kernel_size=kernel_size, padding=kernel_size//2),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=num_filters, out_channels=num_filters,
-                        kernel_size=kernel_size, padding=kernel_size//2),
-            nn.ReLU(),
-            nn.BatchNorm1d(num_filters), # normalise before passing to LSTM
-            nn.Dropout(dropout)
-        )
-        # LSTM layers
-        self.lstm = nn.LSTM(
-            input_size=num_filters, # takes CNN output
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=lstm_dropout if num_layers > 1 else 0
-        )
-        # Output layer (maps final pattern produced by LSTM to actual prediction) (fully connected)
-        self.fc = nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        # x is 3D tensor (batch_size, timesteps, features)
-        # CNN
-        x = x.permute(0, 2, 1) # (batch, features, timesteps)
-        x = self.cnn(x)
-        x = x.permute(0, 2, 1) # (batch, timesteps, num_filters)
-        # LSTM
-        lstmOutput, (hidden, cell) = self.lstm(x)
-        # FC
-        lastTimestep = lstmOutput[:, -1, :] # slice out last timestep across all samples and neurons
-        return self.fc(lastTimestep) # map to prediction (batch_size, output size)
+ForexRNN, ForexHybrid = lstm.classBuilder()
 
 # DEFINE FEATURES (copy-paste from the model training features exactly)
 directory = "results"
@@ -72,12 +37,22 @@ with open(filepath, "r") as file:
     lookback = hyperparams["lookback"]
 
 # LOAD MODEL AND SCALER
-model = ForexHybrid(
-    **params,
-    input_size=len(featureList),
-    output_size=3,
-    lstm_dropout=params["dropout"]
-).to(device)
+match arch:
+    case 0:
+        del params["num_filters"]
+        del params["kernel_size"]
+        model = ForexRNN(
+            **params,
+            input_size=len(featureList),
+            output_size=3
+        ).to(device)
+    case 1:
+        model = ForexHybrid(
+            **params,
+            input_size=len(featureList),
+            output_size=3,
+            lstm_dropout=params["dropout"]
+        ).to(device)
 
 directory = "models"
 filename = f"NN_{instrument}_{granularity}_{yearNow}_v{version}.pth"
@@ -101,19 +76,10 @@ for i in range(len(features) - lookback + 1):
 X = torch.tensor(np.array(X), dtype=torch.float32, device=device)
 
 # RUN INFERENCES
-def predictByThreshold(probs, threshold=0.36):
-    preds = []
-    for p in probs:
-        if p[1] > max(threshold, p[0], p[2]):
-            preds.append(1)
-        else:
-            preds.append(0 if p[0] > p[2] else 2)
-    return preds
-
 with torch.no_grad():
     logits = model(X)
     probs = torch.softmax(logits, dim=1).cpu().numpy()
-    preds = predictByThreshold(probs)
+    preds = torch.argmax(logits, dim=1).cpu().numpy()
 
 # DISPLAY RESULTS
 def getLabel(num):
@@ -133,5 +99,3 @@ for idx, prob in enumerate(finalProbs):
     print(f"{getLabel(idx)}: {prob*100:.2f}%")
 
 print(f"\nFinal prediction: {finalPred}")
-
-input("\nPress Enter to exit")
