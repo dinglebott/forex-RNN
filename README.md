@@ -1,11 +1,11 @@
 ## About project
 Goal: Predict the direction of future price movements in forex markets by training a neural network\
-See also [trading-trees](https://github.com/dinglebott/trading-trees) project, which uses a tree-based model architecture to achieve the same goal.\
-In this project I experiment with neural network architectures such as CNN and LSTM, potentially ensembling it with the XGBoost model built in [trading-trees](https://github.com/dinglebott/trading-trees).\
-<br/>
+This is part 2 of the whole forex prediction project, where I experiment with neural network architectures such as CNN and LSTM. See below for the rest of the project.\
 CNN (Convolutional Neural Network) is a model that uses kernels to filter out local patterns in the data (~ 3 candles), and abstracts it into inputs for the LSTM to train on. It performs well in pattern recognition and spatial data.\
 LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which performs well in sequential data like time series, due to its "memory" of previous time windows.\
-*See DOCS.md for detailed results and workflow*
+*See DOCS.md for detailed results and workflow*\
+<br/>
+Part 1: [trading-trees](https://github.com/dinglebott/trading-trees), using a tree-based architecture (XGBoost)\
 
 ## Outline of methodology
 Phase 1: Fetch historical data in `fetch_data.py`\
