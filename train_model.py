@@ -15,17 +15,14 @@ with open("env.json", "r") as file:
     globalVars = json.load(file)
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # GET HYPERPARAMETERS
-directory = "results"
-filename = "hyperparameters.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("results", "hyperparameters.json")
 with open(filepath, "r") as file:
     hyperparameters = json.load(file) # hyperparameters is a python dict
 print(f"Hyperparameters: {hyperparameters['allParams']}")
 hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 100 # early stopping implemented
-schedulerPatience = 5
-earlyStoppingPatience = 20
+earlyStoppingPatience = 50
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
                "bb_width", "bb_position",
@@ -47,13 +44,11 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-directory = "results"
-filename = "features.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -155,7 +150,7 @@ def batchPredict(model, X, batchSize=1024):
     return np.concatenate(allPreds)
 
 # for early stopping and saving best model
-bestCostScore = 100
+bestCostScore = 0
 badEpochs = 0
 bestModelState = None
 
@@ -228,12 +223,10 @@ print(f"\nModel size: {trainable}")
 directory = "models"
 if not os.path.exists(directory):
     os.makedirs(directory)
-filename = f"NN_{instrument}_{granularity}_{yearNow}.pth"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join(directory, f"NN_{instrument}_{granularity}_{yearNow}.pth")
 torch.save(model.state_dict(), filepath)
-print("\nModel saved to: " + filename)
+print("\nModel saved to: " + f"NN_{instrument}_{granularity}_{yearNow}.pth")
 
 # SAVE SCALER
-filename = f"scaler.pkl"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join(directory, f"scaler.pkl")
 joblib.dump(scaler, filepath)

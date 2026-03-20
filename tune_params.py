@@ -41,13 +41,11 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-directory = "results"
-filename = "features.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -125,8 +123,8 @@ def objective(trial):
     dropout = trial.suggest_float("dropout", 0.45, 0.55) # for CNN
     lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 5e-7, 1e-5, log=True)
-    weightDecay = trial.suggest_float("weight_decay", 1e-4, 4e-3)
+    learningRate = trial.suggest_float("lr", 4e-5, 9e-4)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
     batchSize = trial.suggest_categorical("batch_size", [192, 256, 384, 512])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 3.5, 5.5)
     if arch == 1:
@@ -208,7 +206,7 @@ def objective(trial):
             with torch.no_grad(): # disable gradient tracking to save memory
                 valPreds = batchPredict(model, X_fold_val)
                 valCostScore = lstm.costScore(foldValTrue, valPreds)
-                valLoss = batchLoss(model, X_fold_val, foldValTrue, criterion)
+                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
 
             # check for early stopping
             if valCostScore >= bestCostScore:
@@ -265,7 +263,6 @@ hyperparameters = {
 directory = "results"
 if not os.path.exists(directory):
     os.makedirs(directory)
-filename = "hyperparameters.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join(directory, "hyperparameters.json")
 with open(filepath, "w") as file:
     json.dump(hyperparameters, file, indent=4)

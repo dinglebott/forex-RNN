@@ -19,16 +19,16 @@ numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.45 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 1e-05
-weightDecay = 0.000867
+learningRate = 1e-04
+weightDecay = 1e-4
 batchSize = 256
 clipGradNorm = 4.46
 # CNN params
 numFilters = 32
 kernelSize = 5
 # other
-epochs = 200 # early stopping implemented
-earlyStoppingPatience = 1000
+epochs = 150 # early stopping implemented
+earlyStoppingPatience = 20
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -233,6 +233,5 @@ print(importances.to_string(index=False))
 directory = "results"
 if not os.path.exists(directory):
     os.makedirs(directory)
-filename = "features.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join(directory, "features.json")
 importances.set_index("Feature")["Importance"].to_json(filepath, indent=4)

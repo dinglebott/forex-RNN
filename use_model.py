@@ -17,16 +17,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ForexRNN, ForexHybrid = lstm.classBuilder()
 
 # DEFINE FEATURES (copy-paste from the model training features exactly)
-directory = "results"
-filename = f"features_v{version}.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("results", f"features_v{version}.json")
 # deserialise json data
 with open(filepath, "r") as file:
     featureList = json.load(file)["features"]
 
 # DEFINE PARAMETERS (copy-paste from the model training hyperparameters exactly)
-filename = f"hyperparameters_v{version}.json"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("results", f"hyperparameters_v{version}.json")
 # deserialise json data
 with open(filepath, "r") as file:
     hyperparams = json.load(file)
@@ -51,14 +48,11 @@ match arch:
             lstm_dropout=params["dropout"]
         ).to(device)
 
-directory = "models"
-filename = f"NN_{instrument}_{granularity}_{yearNow}_v{version}.pth"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("models", f"NN_{instrument}_{granularity}_{yearNow}_v{version}.pth")
 model.load_state_dict(torch.load(filepath, map_location=device))
 model.eval()
 
-filename = f"scaler_v{version}.pkl"
-filepath = os.path.join(directory, filename)
+filepath = os.path.join("models", f"scaler_v{version}.pkl")
 scaler = joblib.load(filepath)
 
 # FETCH AND PARSE CURRENT DATA

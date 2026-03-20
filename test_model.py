@@ -102,6 +102,13 @@ y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 testTrue = y_test.cpu().numpy() # for f1 score
 
 # RUN INFERENCES
+def predictByThreshold(probs, preds, threshold=0.335):
+    filteredPreds = np.full(len(probs), 1) # initialise all flat
+    # binary mask: returns array of True and False that is used to index preds
+    filteredPreds[(preds == 0) & (probs[:, 0] > threshold)] = 0 # only if confidence exceeds threshold
+    filteredPreds[(preds == 2) & (probs[:, 2] > threshold)] = 2
+    return filteredPreds
+
 with torch.no_grad():
     logits = model(X_test)
     probs = torch.softmax(logits, dim=1).cpu().numpy()
@@ -126,3 +133,5 @@ print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
+with np.printoptions(threshold=50):
+    print(probs)
