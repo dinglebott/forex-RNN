@@ -11,13 +11,11 @@ import os
 import json
 
 # GLOBAL VARIABLES
-yearNow = 2026
-instrument = "EUR_USD"
-granularity = "H4"
-arch = 1 # 0 for LSTM, 1 for CNN/LSTM
+with open("env.json", "r") as file:
+    globalVars = json.load(file)
+yearNow, instrument, granularity, arch, _ = globalVars.values()
 # other
 epochs = 80 # early stopping implemented
-schedulerPatience = 5
 earlyStoppingPatience = 20
 featureList = ["return", "return_4", "log_return", "log_return_4",
                "atr_14", "volatility_regime",
@@ -210,6 +208,7 @@ def objective(trial):
             with torch.no_grad(): # disable gradient tracking to save memory
                 valPreds = batchPredict(model, X_fold_val)
                 valCostScore = lstm.costScore(foldValTrue, valPreds)
+                valLoss = batchLoss(model, X_fold_val, foldValTrue, criterion)
 
             # check for early stopping
             if valCostScore >= bestCostScore:
@@ -222,7 +221,7 @@ def objective(trial):
                     break
             
             # tune learning rate down if plateauing
-            scheduler.step(valCostScore)
+            scheduler.step(valLoss)
         # restore best model
         if bestModelState is not None:
             model.load_state_dict(bestModelState)

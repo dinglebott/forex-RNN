@@ -20,7 +20,7 @@ The main code is all in the top-level scripts.\
 The `custom_modules` folder contains helper functions to fetch and manipulate the data.
 
 ## How to build a model
-The top-level scripts contain global variables for the current year, the desired instrument, and granularity. I built my model for 2026 EUR/USD at H4 granularity. For other options, set these to the appropriate values.\
+`env.json` contains global variables for the current year, the desired instrument, and granularity. `arch` determines the model architecture: 0 for pure LSTM, 1 for hybrid CNN/LSTM. I built my model for 2026 EUR/USD at H4 granularity. For other options, set these to the appropriate values.\
 Once the model is trained, rewrite `features.json` in the `results` folder to match the format you see (sorry about that). Also, rename `features.json` and `hyperparameters.json` with the version number like you see too.\
 Output for all phases is printed to the terminal, and the final model is automatically saved as a JSON file.
 #### IMPORTANT:

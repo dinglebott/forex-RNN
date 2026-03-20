@@ -26,7 +26,7 @@ def costScore(y_true, y_preds):
     collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class above 0.5
     return score - collapsePenalty
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=15):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=8):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
@@ -51,7 +51,7 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
     criterion = CostSensitiveLoss(penMatrix, weightsTensor) # function to minimise
     optimiserClass = {"AdamW": torch.optim.AdamW, "RMSprop": torch.optim.RMSprop}[optimiser_name]
     optimiser = optimiserClass(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="max", factor=0.717, patience=scheduler_patience, min_lr=1e-6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="min", factor=0.717, patience=scheduler_patience, min_lr=1e-6)
 
     return criterion, optimiser, scheduler, classWeights
 

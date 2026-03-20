@@ -11,10 +11,9 @@ import os
 import json
 
 # GLOBAL VARIABLES
-yearNow = 2026
-instrument = "EUR_USD"
-granularity = "H4"
-arch = 1 # 0 for LSTM, 1 for CNN/LSTM
+with open("env.json", "r") as file:
+    globalVars = json.load(file)
+yearNow, instrument, granularity, arch, _ = globalVars.values()
 # GET HYPERPARAMETERS
 directory = "results"
 filename = "hyperparameters.json"
@@ -176,6 +175,7 @@ for _ in range(epochs):
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
+        valLoss = criterion(valLogits, y_val)
         valPreds = torch.argmax(valLogits, dim=1).cpu().numpy()
     valCostScore = lstm.costScore(valTrue, valPreds)
 
@@ -190,7 +190,7 @@ for _ in range(epochs):
             break
     
     # tune learning rate down
-    scheduler.step(valCostScore)
+    scheduler.step(valLoss)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)

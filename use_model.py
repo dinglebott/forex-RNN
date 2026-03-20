@@ -6,11 +6,9 @@ import os
 import json
 
 # GLOBAL VARIABLES
-yearNow = 2026
-instrument = "EUR_USD"
-granularity = "H4"
-arch = 1 # 0 for LSTM, 1 for CNN/LSTM
-version = 4
+with open("env.json", "r") as file:
+    globalVars = json.load(file)
+yearNow, instrument, granularity, arch, version = globalVars.values()
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -7,19 +7,19 @@ from sklearn.preprocessing import StandardScaler
 import copy
 from sklearn.metrics import f1_score
 import os
+import json
 
 # GLOBAL VARIABLES
-yearNow = 2026
-instrument = "EUR_USD"
-granularity = "H4"
-arch = 1 # 0 for LSTM, 1 for CNN/LSTM
+with open("env.json", "r") as file:
+    globalVars = json.load(file)
+yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
 hiddenSize = 192 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.45 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 2.36e-06
+learningRate = 1e-05
 weightDecay = 0.000867
 batchSize = 256
 clipGradNorm = 4.46
@@ -27,8 +27,8 @@ clipGradNorm = 4.46
 numFilters = 32
 kernelSize = 5
 # other
-epochs = 150 # early stopping implemented
-earlyStoppingPatience = 100
+epochs = 200 # early stopping implemented
+earlyStoppingPatience = 1000
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -182,7 +182,7 @@ for epoch in range(epochs):
             break
     
     # tune learning rate down
-    scheduler.step(valCostScore)
+    scheduler.step(valLoss)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)
