@@ -22,14 +22,16 @@ print(f"Hyperparameters: {hyperparameters['allParams']}")
 hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 100 # early stopping implemented
-earlyStoppingPatience = 50
-featureList = ["return", "return_4", "log_return", "log_return_4",
-               "atr_14", "volatility_regime",
-               "bb_width", "bb_position",
-               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-               "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
-               "open_return", "high_return", "low_return", "close_return"]
+earlyStoppingPatience = 20
+featureList = [
+    "return", "return_4", "log_return", "log_return_4",
+    "atr_14", "volatility_regime",
+    "bb_width", "bb_position",
+    "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+    "normalised_ema15", "normalised_ema50", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
+    "open_return", "high_return", "low_return", "close_return"
+]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -218,6 +220,7 @@ print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
+print(testProbs)
 
 # SAVE MODEL
 directory = "models"

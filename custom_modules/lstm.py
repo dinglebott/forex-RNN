@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 
-pen = 1.4 # 1.0 < pen < 2.0 (1.0 for none)
-pen2 = 0.1 # 0.0 < pen2 < pen - 1- (0.001 for none)
+pen = 1.25 # 1.0 < pen < 2.0 (1.0 for none)
+pen2 = 0.15 # 0.0 < pen2 < pen - 1 (0.001 for none)
 penMatrix = torch.tensor([
     [2.0 - pen, 1.0 - pen2, pen + pen2],
     [1.0 + pen2/2, 1.0 - pen2, 1.0 + pen2/2],
@@ -26,7 +26,7 @@ def costScore(y_true, y_preds):
     collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class above 0.5
     return score - collapsePenalty
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=8):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=10):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
@@ -51,7 +51,7 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
     criterion = CostSensitiveLoss(penMatrix, weightsTensor) # function to minimise
     optimiserClass = {"AdamW": torch.optim.AdamW, "RMSprop": torch.optim.RMSprop}[optimiser_name]
     optimiser = optimiserClass(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="min", factor=0.717, patience=scheduler_patience, min_lr=1e-6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="min", factor=0.5, patience=scheduler_patience, min_lr=1e-6)
 
     return criterion, optimiser, scheduler, classWeights
 

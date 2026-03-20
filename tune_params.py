@@ -117,18 +117,18 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [128, 192, 256]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [192]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
     dropout = trial.suggest_float("dropout", 0.45, 0.55) # for CNN
-    lookback = trial.suggest_categorical("lookback", [15, 20, 25, 30])
+    lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
     learningRate = trial.suggest_float("lr", 4e-5, 9e-4)
     weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [192, 256, 384, 512])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 3.5, 5.5)
+    batchSize = trial.suggest_categorical("batch_size", [192, 256, 384])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 5.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32, 48, 64])
+        numFilters = trial.suggest_categorical("num_filters", [24, 32, 48])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
@@ -245,7 +245,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=60, show_progress_bar=True)
+study.optimize(objective, n_trials=80, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
