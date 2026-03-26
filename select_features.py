@@ -35,7 +35,7 @@ featureList = [
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
     "dist_ema15", "dist_ema50", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
 ]
 
 # use CUDA if available, otherwise use CPU
