@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import copy
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
+from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score, confusion_matrix
 import os
 import json
 
@@ -152,7 +152,7 @@ def batchPredict(model, X, batchSize=1024):
     return np.concatenate(allPreds)
 
 # for early stopping and saving best model
-bestCostScore = 0
+bestValLoss = 100
 badEpochs = 0
 bestModelState = None
 
@@ -173,12 +173,10 @@ for _ in range(epochs):
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valLoss = criterion(valLogits, y_val)
-        valPreds = torch.argmax(valLogits, dim=1).cpu().numpy()
-    valCostScore = lstm.costScore(valTrue, valPreds)
 
     # check for early stopping
-    if valCostScore >= bestCostScore:
-        bestCostScore = valCostScore
+    if valLoss <= bestValLoss:
+        bestValLoss = valLoss
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
@@ -205,6 +203,7 @@ accuracy = accuracy_score(testTrue, testPreds)*100
 costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
+logLossScore = log_loss(testTrue, testProbs)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
 total, trainable = lstm.numParams(model)
 
@@ -217,6 +216,7 @@ print(f"Accuracy: {accuracy:.3f}%")
 print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
+print(f"Log loss: {logLossScore:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")

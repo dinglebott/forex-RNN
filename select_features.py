@@ -141,7 +141,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for early stopping and saving best model
-bestCostScore = 0
+bestValLoss = 100
 badEpochs = 0
 bestModelState = None
 
@@ -171,8 +171,8 @@ for epoch in range(epochs):
     print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.4f} | Val loss: {valLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
 
     # check for early stopping
-    if valCostScore >= bestCostScore:
-        bestCostScore = valCostScore
+    if valLoss <= bestValLoss:
+        bestValLoss = valLoss
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:

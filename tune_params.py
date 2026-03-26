@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, log_loss
 import os
 import json
 
@@ -105,6 +105,14 @@ def batchPredict(model, X, batchSize=1024):
         preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions
         allPreds.append(preds)
     return np.concatenate(allPreds)
+def batchProbs(model, X, batchSize=1024):
+    allProbs = []
+    for i in range(0, len(X), batchSize):
+        batch = X[i : i + batchSize]
+        logits = model(batch) # raw output of model => tensor of shape (samples, 3)
+        probs = torch.softmax(logits, dim=1).cpu().numpy() # convert to predictions
+        allProbs.append(probs)
+    return np.concatenate(allProbs)
 def batchLoss(model, X, y, criterion, batchSize=1024):
     totalLoss = 0
     for i in range(0, len(X), batchSize):
@@ -141,7 +149,6 @@ def objective(trial):
 
     # SUBFOLD LOOP
     testScores = []
-    trainScores = []
     f1Scores = []
     for trainIdxs, valIdxs in trainValSplit.split(X_train):
         # SPLIT TRAIN AND VALIDATION SETS
@@ -150,8 +157,6 @@ def objective(trial):
         X_fold_val = X_train[valIdxs]
         y_fold_train = y_train[purgedTrainIndexes]
         y_fold_val = y_train[valIdxs]
-        foldTrainTrue = y_fold_train.cpu().numpy() # for F1 score later
-        foldValTrue = y_fold_val.cpu().numpy()
 
         # INSTANTIATE MODEL
         match arch:
@@ -185,7 +190,7 @@ def objective(trial):
         # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
         # for early stopping
-        bestCostScore = 0
+        bestValLoss = 100
         badEpochs = 0
         bestModelState = None
 
@@ -204,13 +209,11 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valPreds = batchPredict(model, X_fold_val)
-                valCostScore = lstm.costScore(foldValTrue, valPreds)
                 valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
 
             # check for early stopping
-            if valCostScore >= bestCostScore:
-                bestCostScore = valCostScore
+            if valLoss <= bestValLoss:
+                bestValLoss = valLoss
                 badEpochs = 0
                 bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
             else:
@@ -227,24 +230,22 @@ def objective(trial):
         # TEST MODEL
         model.eval() # disable dropout
         with torch.no_grad(): # disable gradient tracking to save memory
+            testProbs = batchProbs(model, X_test)
             testPreds = batchPredict(model, X_test)
-            foldTrainPreds = batchPredict(model, X_fold_train) # check for overfitting
 
         # EVALUATE MODEL
-        costScore = lstm.costScore(testTrue, testPreds)
-        testScores.append(costScore)
-        trainCostScore = lstm.costScore(foldTrainTrue, foldTrainPreds)
-        trainScores.append(trainCostScore)
+        logLossScore = log_loss(testTrue, testProbs)
+        testScores.append(logLossScore)
         f1 = f1_score(testTrue, testPreds, average="macro", zero_division=0)
         f1Scores.append(f1)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Train: {np.mean(trainScores):.4f} | Test: {np.mean(testScores):.4f} | F1: {np.mean(f1Scores):.4f}")
+    print(f"Trial {trial.number} | Loss: {np.mean(testScores)} | F1: {np.mean(f1Scores):.4f}")
 
     return np.mean(testScores)
 
 # MAIN OPTUNA MAGIC
-study = optuna.create_study(direction="maximize")
+study = optuna.create_study(direction="minimize")
 study.optimize(objective, n_trials=80, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
