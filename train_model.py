@@ -51,6 +51,14 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [
+    "high_return", "low_return", "vol_return", "smooth_return",
+    "atr_14", "volatility_regime",
+    "bb_width",
+    "hl_spread", "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "ema_cross", "adx_direction",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
+]
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -213,11 +221,10 @@ cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
-print(f"Log loss: {lossScore:.5f}")
+print(f"Cost loss: {lossScore:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
-print(testProbs)
 
 # SAVE MODEL
 directory = "models"

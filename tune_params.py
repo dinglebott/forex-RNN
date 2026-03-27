@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
-from sklearn.metrics import f1_score, log_loss
+from sklearn.metrics import f1_score
 import os
 import json
 
@@ -49,11 +49,11 @@ with open(filepath, "r") as file:
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 featureList = [
     "high_return", "low_return", "vol_return", "smooth_return",
-    "volatility_regime",
+    "atr_14", "volatility_regime",
     "bb_width",
     "hl_spread", "upper_wick", "lower_wick",
-    "dist_ema15", "dist_ema50", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+    "dist_ema15", "dist_ema50", "ema_cross", "adx_direction",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
 ]
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
@@ -137,16 +137,16 @@ def objective(trial):
         "hidden_size": trial.suggest_categorical("hidden_size", [192]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.1, 0.3) # for CNN
+    dropout = trial.suggest_float("dropout", 0.05, 0.15) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-3, 1e-2)
-    weightDecay = trial.suggest_float("weight_decay", 5e-5, 1e-3)
-    batchSize = trial.suggest_categorical("batch_size", [256, 384, 512, 768])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 5.0)
+    learningRate = trial.suggest_float("lr", 5e-4, 5e-3)
+    weightDecay = trial.suggest_float("weight_decay", 5e-4, 5e-3)
+    batchSize = trial.suggest_categorical("batch_size", [512])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 4.5, 5.5)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [24, 32, 48])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5, 7])
+        numFilters = trial.suggest_categorical("num_filters", [48])
+        kernelSize = trial.suggest_categorical("kernel_size", [5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # CREATE SEQUENCES (already converted to tensors by function)
@@ -248,7 +248,7 @@ def objective(trial):
         f1Scores.append(f1)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.4f} | F1: {np.mean(f1Scores):.4f}")
+    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.5f} | F1: {np.mean(f1Scores):.5f}")
 
     return np.mean(testScores)
 
