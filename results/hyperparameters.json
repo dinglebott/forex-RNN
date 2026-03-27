@@ -2,22 +2,22 @@
     "modelParams": {
         "hidden_size": 192,
         "num_layers": 1,
-        "dropout": 0.11995915034865302,
-        "num_filters": 48,
+        "dropout": 0.12347024563268397,
+        "num_filters": 32,
         "kernel_size": 5
     },
     "lookback": 20,
     "allParams": {
         "hidden_size": 192,
         "num_layers": 1,
-        "dropout": 0.11995915034865302,
+        "dropout": 0.12347024563268397,
         "lookback": 20,
         "optimiser": "RMSprop",
-        "lr": 0.0009695987228561543,
-        "weight_decay": 0.0009428345262171545,
+        "lr": 0.0004259571256906852,
+        "weight_decay": 0.0007261265355922783,
         "batch_size": 512,
-        "clip_grad_norm": 5.077873565190529,
-        "num_filters": 48,
+        "clip_grad_norm": 4.601038529715379,
+        "num_filters": 32,
         "kernel_size": 5
     }
 }

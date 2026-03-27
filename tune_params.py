@@ -16,7 +16,7 @@ with open("env.json", "r") as file:
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 20
+earlyStoppingPatience = 10
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -47,14 +47,14 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
-featureList = [
+'''featureList = [
     "high_return", "low_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
     "bb_width",
     "hl_spread", "upper_wick", "lower_wick",
     "dist_ema15", "dist_ema50", "ema_cross", "adx_direction",
     "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
-]
+]''' # for manual feature setting (comment out when not needed)
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -137,16 +137,16 @@ def objective(trial):
         "hidden_size": trial.suggest_categorical("hidden_size", [192]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.05, 0.15) # for CNN
+    dropout = trial.suggest_float("dropout", 0.08, 0.15) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 5e-4, 5e-3)
-    weightDecay = trial.suggest_float("weight_decay", 5e-4, 5e-3)
+    learningRate = trial.suggest_float("lr", 1e-4, 1e-3)
+    weightDecay = trial.suggest_float("weight_decay", 5e-5, 1e-3)
     batchSize = trial.suggest_categorical("batch_size", [512])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.5, 5.5)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [48])
-        kernelSize = trial.suggest_categorical("kernel_size", [5])
+        numFilters = trial.suggest_categorical("num_filters", [32, 48])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # CREATE SEQUENCES (already converted to tensors by function)

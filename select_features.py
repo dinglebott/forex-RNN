@@ -16,19 +16,19 @@ yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
 hiddenSize = 192 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.25 # equivalent of subsample for RNN
+dropOut = 0.15 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 8e-5
-weightDecay = 1e-3
+learningRate = 6e-4
+weightDecay = 6e-4
 batchSize = 512
-clipGradNorm = 4.35
+clipGradNorm = 5.08
 # CNN params
-numFilters = 32
-kernelSize = 3
+numFilters = 48
+kernelSize = 5
 # other
-epochs = 150 # early stopping implemented
-earlyStoppingPatience = 20
+epochs = 80 # early stopping implemented
+earlyStoppingPatience = 10
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
