@@ -14,18 +14,18 @@ with open("env.json", "r") as file:
     globalVars = json.load(file)
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
-hiddenSize = 128 # no. of neurons in hidden state
+hiddenSize = 192 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.4 # equivalent of subsample for RNN
+dropOut = 0.25 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
 learningRate = 8e-5
-weightDecay = 2e-5
-batchSize = 192
-clipGradNorm = 4.46
+weightDecay = 1e-3
+batchSize = 512
+clipGradNorm = 4.35
 # CNN params
-numFilters = 64
-kernelSize = 5
+numFilters = 32
+kernelSize = 3
 # other
 epochs = 150 # early stopping implemented
 earlyStoppingPatience = 20
@@ -192,7 +192,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
     
 # EVALUATE MODEL
-baselineLoss = criterion(testLogits, y_test)
+baselineLoss = criterion(testLogits, y_test).item()
 
 # GET PERMUTATION IMPORTANCES
 model.eval()
@@ -209,9 +209,8 @@ for featureIdx in range(numFeatures):
         # predict with messed up feature column
         with torch.no_grad():
             logits = model(X_perm)
-            probs = torch.softmax(logits, dim=1).cpu().numpy()
         # record score for this iteration
-        score = criterion(logits, y_test)
+        score = criterion(logits, y_test).item()
         scores.append(score)
     # average score for this feature
     avgScore = np.mean(scores)

@@ -201,7 +201,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
 costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
-lossScore = criterion(testLogits, y_test)
+lossScore = criterion(testLogits, y_test).item()
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
 total, trainable = lstm.numParams(model)
 

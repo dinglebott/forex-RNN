@@ -47,6 +47,14 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [
+    "high_return", "low_return", "vol_return", "smooth_return",
+    "volatility_regime",
+    "bb_width",
+    "hl_spread", "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+]
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
