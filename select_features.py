@@ -19,7 +19,7 @@ numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.45 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 1e-04
+learningRate = 5e-5
 weightDecay = 1e-4
 batchSize = 256
 clipGradNorm = 4.46
@@ -34,8 +34,8 @@ featureList = [
     "atr_14", "volatility_regime",
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-    "dist_ema15", "dist_ema50", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
+    "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
 ]
 
 # use CUDA if available, otherwise use CPU
@@ -212,7 +212,7 @@ for featureIdx in range(numFeatures):
         # predict with messed up feature column
         with torch.no_grad():
             logits = model(X_perm)
-            probs = torch.softmax(logits, dim=1)
+            probs = torch.softmax(logits, dim=1).cpu().numpy()
         # record score for this iteration
         score = log_loss(testTrue, probs)
         scores.append(score)
