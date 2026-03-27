@@ -17,13 +17,14 @@ yearNow, instrument, granularity, arch, _ = globalVars.values()
 # other
 epochs = 80 # early stopping implemented
 earlyStoppingPatience = 20
-featureList = ["return", "return_4", "log_return", "log_return_4",
-               "atr_14", "volatility_regime",
-               "bb_width", "bb_position",
-               "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-               "normalised_ema15", "normalised_ema50", "ema_cross",
-               "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
-               "open_return", "high_return", "low_return", "close_return"]
+featureList = [
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
+    "atr_14", "volatility_regime",
+    "bb_width", "bb_position",
+    "hl_spread", "oc_spread", "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+]
 
 # use CUDA if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +46,7 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -128,12 +129,12 @@ def objective(trial):
         "hidden_size": trial.suggest_categorical("hidden_size", [192]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.45, 0.55) # for CNN
+    dropout = trial.suggest_float("dropout", 0.1, 0.3) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 4e-5, 9e-4)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
-    batchSize = trial.suggest_categorical("batch_size", [192, 256, 384])
+    learningRate = trial.suggest_float("lr", 1e-3, 1e-2)
+    weightDecay = trial.suggest_float("weight_decay", 5e-5, 1e-3)
+    batchSize = trial.suggest_categorical("batch_size", [256, 384, 512, 768])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 5.0)
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [24, 32, 48])
@@ -230,23 +231,22 @@ def objective(trial):
         # TEST MODEL
         model.eval() # disable dropout
         with torch.no_grad(): # disable gradient tracking to save memory
-            testProbs = batchProbs(model, X_test)
+            testLoss = batchLoss(model, X_test, y_test, criterion)
             testPreds = batchPredict(model, X_test)
 
         # EVALUATE MODEL
-        logLossScore = log_loss(testTrue, testProbs)
-        testScores.append(logLossScore)
+        testScores.append(testLoss)
         f1 = f1_score(testTrue, testPreds, average="macro", zero_division=0)
         f1Scores.append(f1)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Loss: {np.mean(testScores)} | F1: {np.mean(f1Scores):.4f}")
+    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.4f} | F1: {np.mean(f1Scores):.4f}")
 
     return np.mean(testScores)
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=80, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

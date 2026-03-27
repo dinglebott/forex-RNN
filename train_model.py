@@ -50,7 +50,7 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= -1] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -103,7 +103,6 @@ y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 # shape of X: (samples, timesteps, features)
 # shape of y: (samples, output_classes)
 trainTrue = y_train.cpu().numpy() # for f1 score later
-valTrue = y_val.cpu().numpy()
 testTrue = y_test.cpu().numpy()
 
 # BUILD MODEL
@@ -202,7 +201,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
 costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
-logLossScore = log_loss(testTrue, testProbs)
+lossScore = criterion(testLogits, y_test)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
 total, trainable = lstm.numParams(model)
 
@@ -214,7 +213,7 @@ cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
-print(f"Log loss: {logLossScore:.5f}")
+print(f"Log loss: {lossScore:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")

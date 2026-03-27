@@ -14,17 +14,17 @@ with open("env.json", "r") as file:
     globalVars = json.load(file)
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
-hiddenSize = 192 # no. of neurons in hidden state
+hiddenSize = 128 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.45 # equivalent of subsample for RNN
+dropOut = 0.4 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 5e-5
-weightDecay = 1e-4
-batchSize = 256
+learningRate = 8e-5
+weightDecay = 2e-5
+batchSize = 192
 clipGradNorm = 4.46
 # CNN params
-numFilters = 32
+numFilters = 64
 kernelSize = 5
 # other
 epochs = 150 # early stopping implemented
@@ -102,7 +102,6 @@ y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 # shape of X: (samples, timesteps, features)
 # shape of y: (samples, output_classes)
 valTrue = y_val.cpu().numpy() # for f1 score later
-testTrue = y_test.cpu().numpy()
 
 # BUILD MODELS
 ForexRNN, ForexHybrid = lstm.classBuilder()
@@ -191,11 +190,9 @@ if bestModelState is not None:
 model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
-    testProbs = torch.softmax(testLogits, dim=1).cpu().numpy()
-    testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions
     
 # EVALUATE MODEL
-baselineLogLoss = log_loss(testTrue, testProbs)
+baselineLoss = criterion(testLogits, y_test)
 
 # GET PERMUTATION IMPORTANCES
 model.eval()
@@ -214,12 +211,12 @@ for featureIdx in range(numFeatures):
             logits = model(X_perm)
             probs = torch.softmax(logits, dim=1).cpu().numpy()
         # record score for this iteration
-        score = log_loss(testTrue, probs)
+        score = criterion(logits, y_test)
         scores.append(score)
     # average score for this feature
     avgScore = np.mean(scores)
     # calculate how much the model was hurt by shuffling this feature
-    importances.append(avgScore - baselineLogLoss)
+    importances.append(avgScore - baselineLoss)
 
 # display results
 importances = pd.DataFrame({
