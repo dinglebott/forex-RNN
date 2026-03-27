@@ -88,6 +88,7 @@ def parseData(jsonPath):
     # EMAs
     df["dist_ema15"] = np.log(df["close"] / getEma(15))
     df["dist_ema50"] = np.log(df["close"] / getEma(50))
+    df["dist_ema100"] = np.log(df["close"] / getEma(100))
     df["ema_cross"] = np.log(getEma(15) / getEma(50))
     # RSI
     def rsi(series, n=14):
@@ -96,7 +97,7 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close"])
+    df["rsi_14"] = rsi(df["close_smooth"]) - 50
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
@@ -105,13 +106,38 @@ def parseData(jsonPath):
     vol_sma30 = df["volume"].rolling(30).mean()
     df["vol_ratio"] = df["volume"] / vol_sma30
     df["vol_momentum"] = df["vol_ratio"] - df["vol_ratio"].rolling(5).mean()
-    # TODO: for the xgboost
+    # ADX, DIs
+    def adx(df, period=14):
+        high = df["high"]
+        low = df["low"]
+        # directional movement
+        up_move = high - high.shift(1)
+        down_move = low.shift(1) - low
+        # +DM: up move is greater than down move and positive
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+        # smooth with wilder moving average (equivalent to EWM with alpha=1/period)
+        plus_dm_smooth = pd.Series(plus_dm).ewm(alpha=1/period, adjust=False).mean()
+        minus_dm_smooth = pd.Series(minus_dm).ewm(alpha=1/period, adjust=False).mean()
+        atr_smooth = trueRange.ewm(alpha=1/period, adjust=False).mean()
+        # directional indicators
+        plus_di = 100 * plus_dm_smooth / atr_smooth
+        minus_di = 100 * minus_dm_smooth / atr_smooth
+        # ADX
+        dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
+        adx_line = dx.ewm(alpha=1/period, adjust=False).mean()
+
+        return plus_di, minus_di, adx_line
     
+    df["plus_di"], df["minus_di"], df["adx"] = adx(df, period=14)
+    df["di_diff"] = df["plus_di"] - df["minus_di"]
+    df["adx_direction"] = df["di_diff"] * df["adx"] / 100
+
     # TARGET VARIABLE
     df["forward_return"] = (df["close"].shift(-4) / df["close"]) - 1
     conditions = [
-        df["forward_return"] < -0.5 * raw_atr, # downward move
-        df["forward_return"] > 0.5 * raw_atr # upward move
+        df["forward_return"] < -0.5 * df["atr_14"], # downward move
+        df["forward_return"] > 0.5 * df["atr_14"] # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)

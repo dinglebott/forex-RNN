@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import copy
-from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score, confusion_matrix
+from sklearn.metrics import f1_score, log_loss, roc_auc_score, confusion_matrix
 import os
 import json
 
@@ -199,7 +199,6 @@ with torch.no_grad(): # disable gradient tracking to save memory
     trainPreds = batchPredict(model, X_train)
     
 # EVALUATE MODEL
-accuracy = accuracy_score(testTrue, testPreds)*100
 costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
@@ -212,7 +211,6 @@ cmatrix = confusion_matrix(testTrue, testPreds)
 cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=["Pred -", "Pred ~", "Pred +"])
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
-print(f"Accuracy: {accuracy:.3f}%")
 print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")

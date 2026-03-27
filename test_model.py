@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
+from sklearn.metrics import f1_score, log_loss, roc_auc_score, confusion_matrix
 
 # GLOBAL VARIABLES
 with open("env.json", "r") as file:
@@ -115,9 +115,9 @@ with torch.no_grad():
     preds = torch.argmax(logits, dim=1).cpu().numpy()
 
 # EVALUATE MODEL
-accuracy = accuracy_score(testTrue, preds)*100
 costScore = lstm.costScore(testTrue, preds)
 f1Score = f1_score(testTrue, preds, average="macro", zero_division=0)
+logLossScore = log_loss(testTrue, probs)
 rocAucScore = roc_auc_score(testTrue, probs, multi_class="ovr", average="macro")
 total, trainable = lstm.numParams(model)
 
@@ -127,9 +127,9 @@ cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
 print(f"Model version: {version}")
-print(f"Accuracy: {accuracy:.3f}%")
 print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
+print(f"Log loss: {logLossScore:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
