@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import copy
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, log_loss
 import os
 import json
 
@@ -195,7 +195,7 @@ with torch.no_grad(): # disable gradient tracking to save memory
     testPreds = torch.argmax(testLogits, dim=1).cpu().numpy() # convert to predictions
     
 # EVALUATE MODEL
-costScore = lstm.costScore(testTrue, testPreds)
+baselineLogLoss = log_loss(testTrue, testProbs)
 
 # GET PERMUTATION IMPORTANCES
 model.eval()
@@ -213,14 +213,13 @@ for featureIdx in range(numFeatures):
         with torch.no_grad():
             logits = model(X_perm)
             probs = torch.softmax(logits, dim=1)
-            preds = torch.argmax(probs, dim=1).cpu().numpy()
         # record score for this iteration
-        score = lstm.costScore(testTrue, preds)
+        score = log_loss(testTrue, probs)
         scores.append(score)
     # average score for this feature
     avgScore = np.mean(scores)
     # calculate how much the model was hurt by shuffling this feature
-    importances.append(costScore - avgScore)
+    importances.append(avgScore - baselineLogLoss)
 
 # display results
 importances = pd.DataFrame({
