@@ -49,7 +49,7 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= -0.00025] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.00006] # -1 for all features, 0 for positive only
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]

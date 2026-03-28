@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 
-pen = 1.3 # 1.0 < pen < 2.0 (1.0 for none)
-pen2 = 0.1 # 0.0 < pen2 < pen - 1 (0.001 for none)
+pen = 1.2 # 1.0 < pen < 2.0 (1.0 for none)
+pen2 = 0.05 # 0.0 < pen2 < pen - 1 (0.001 for none)
 penMatrix = torch.tensor([
     [2.0 - pen, 1.0 - pen2, pen + pen2],
     [1.0 + pen2/2, 1.0 - pen2, 1.0 + pen2/2],
