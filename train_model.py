@@ -24,13 +24,12 @@ hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDec
 epochs = 100 # early stopping implemented
 earlyStoppingPatience = 10
 featureList = [
-    "return", "return_4", "log_return", "log_return_4",
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
-    "normalised_ema15", "normalised_ema50", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum",
-    "open_return", "high_return", "low_return", "close_return"
+    "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
 ]
 
 # use CUDA if available, otherwise use CPU
