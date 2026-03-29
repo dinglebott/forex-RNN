@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, log_loss
 import os
 import json
 
@@ -16,7 +16,7 @@ with open("env.json", "r") as file:
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 10
+earlyStoppingPatience = 20
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -46,14 +46,15 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.00006] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.0002] # -1 for all features, 0 for positive only
 '''featureList = [
     "high_return", "low_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
-    "bb_width",
-    "hl_spread", "upper_wick", "lower_wick",
-    "dist_ema15", "dist_ema50", "ema_cross", "adx_direction",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum"
+    "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "ema_cross",
+    "rsi_14", "macd_hist",
+    "vol_ratio", "vol_momentum",
+    "adx_direction"
 ]''' # for manual feature setting (comment out when not needed)
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
@@ -69,15 +70,11 @@ splitIdx = timestamps[timestamps > splitDate].index[0] # get index of first row 
 splitIdx = timestamps.index.get_loc(splitIdx) # realign indexes
 
 features_train = features.iloc[:splitIdx]
-features_test = features.iloc[splitIdx:]
-
 labels_train = labels.iloc[:splitIdx].values # convert to numpy array for correct indexing in createSequences()
-labels_test = labels.iloc[splitIdx:].values
 
 # SCALE FEATURES
 scaler = StandardScaler()
 features_train = scaler.fit_transform(features_train)
-features_test = scaler.transform(features_test) # dont fit on test data
 
 # DATA SEQUENCES (created within objective)
 def createSequences(fts, lbls, lookback):
@@ -134,31 +131,28 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [128, 192]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [224, 256, 288]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.1, 0.3) # for CNN
+    dropout = trial.suggest_float("dropout", 0.08, 0.18) # for CNN
     lookback = trial.suggest_categorical("lookback", [15, 20, 25])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 4e-4, 3e-3)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 8e-4)
-    batchSize = trial.suggest_categorical("batch_size", [256, 384, 512])
+    learningRate = trial.suggest_float("lr", 4e-4, 2e-3)
+    weightDecay = trial.suggest_float("weight_decay", 5e-5, 3e-4)
+    batchSize = trial.suggest_categorical("batch_size", [384, 512])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [24, 32, 48])
-        kernelSize = trial.suggest_categorical("kernel_size", [3])
+        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # CREATE SEQUENCES (already converted to tensors by function)
     X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
-    X_test, y_test = getSequences(features_test, labels_test, lookback, key="test")
     # shape of X: (samples, timesteps, features)
     # shape of y: (samples, output_classes)
-    testTrue = y_test.cpu().numpy() # transfer to cpu for F1 score later
 
     # SUBFOLD LOOP
     testScores = []
-    f1Scores = []
     for trainIdxs, valIdxs in trainValSplit.split(X_train):
         # SPLIT TRAIN AND VALIDATION SETS
         purgedTrainIndexes = trainIdxs[:-4] # prevent leaking from candlesAhead
@@ -218,7 +212,8 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
+                valProbs = batchProbs(model, X_fold_val)
+                valLoss = log_loss(y_fold_val.cpu().numpy(), valProbs)
 
             # check for early stopping
             if valLoss <= bestValLoss:
@@ -236,19 +231,11 @@ def objective(trial):
         if bestModelState is not None:
             model.load_state_dict(bestModelState)
 
-        # TEST MODEL
-        model.eval() # disable dropout
-        with torch.no_grad(): # disable gradient tracking to save memory
-            testLoss = batchLoss(model, X_test, y_test, criterion)
-            testPreds = batchPredict(model, X_test)
-
         # EVALUATE MODEL
-        testScores.append(testLoss)
-        f1 = f1_score(testTrue, testPreds, average="macro", zero_division=0)
-        f1Scores.append(f1)
+        testScores.append(bestValLoss)
     
     # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.5f} | F1: {np.mean(f1Scores):.5f}")
+    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.5f}")
 
     return np.mean(testScores)
 

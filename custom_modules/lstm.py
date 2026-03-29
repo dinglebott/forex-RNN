@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 
-pen = 1.2 # 1.0 < pen < 2.0 (1.0 for none)
-pen2 = 0.05 # 0.0 < pen2 < pen - 1 (0.001 for none)
+pen = 1.3 # 1.0 < pen < 2.0 (1.0 for none)
+pen2 = 0.02 # 0.0 < pen2 < pen - 1 (0.00001 for none)
 penMatrix = torch.tensor([
     [2.0 - pen, 1.0 - pen2, pen + pen2],
     [1.0 + pen2/2, 1.0 - pen2, 1.0 + pen2/2],
@@ -26,11 +26,11 @@ def costScore(y_true, y_preds):
     collapsePenalty = max(0, predFreqs.max() - 0.5) # 0 if no class above 0.5
     return score - collapsePenalty
 
-def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=3):
+def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight_decay, scheduler_patience=5):
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
-    classWeights = classWeights * np.array([1.0, 1.0, 1.0]) # for manual adjusting (all 1.0 for default)
+    classWeights = classWeights * np.array([1.05, 1.0, 1.05]) # for manual adjusting (all 1.0 for default)
     weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
     
     class CostSensitiveLoss(torch.nn.Module):

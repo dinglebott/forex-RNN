@@ -22,7 +22,7 @@ print(f"Hyperparameters: {hyperparameters['allParams']}")
 hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 100 # early stopping implemented
-earlyStoppingPatience = 10
+earlyStoppingPatience = 25
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -49,7 +49,16 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.00006] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.0002] # -1 for all features, 0 for positive only
+'''featureList = [
+    "high_return", "low_return", "vol_return", "smooth_return",
+    "atr_14", "volatility_regime",
+    "upper_wick", "lower_wick",
+    "dist_ema15", "dist_ema50", "ema_cross",
+    "rsi_14", "macd_hist",
+    "vol_ratio", "vol_momentum",
+    "adx_direction"
+]'''  # for manual feature setting (comment out when not needed)
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -102,6 +111,7 @@ y_test = torch.tensor(y_test, dtype=torch.long, device=device)
 # shape of X: (samples, timesteps, features)
 # shape of y: (samples, output_classes)
 trainTrue = y_train.cpu().numpy() # for f1 score later
+valTrue = y_val.cpu().numpy()
 testTrue = y_test.cpu().numpy()
 
 # BUILD MODEL
@@ -148,6 +158,21 @@ def batchPredict(model, X, batchSize=1024):
         preds = torch.argmax(logits, dim=1).cpu().numpy() # convert to predictions
         allPreds.append(preds)
     return np.concatenate(allPreds)
+def batchProbs(model, X, batchSize=1024):
+    allProbs = []
+    for i in range(0, len(X), batchSize):
+        batch = X[i : i + batchSize]
+        logits = model(batch) # raw output of model => tensor of shape (samples, 3)
+        probs = torch.softmax(logits, dim=1).cpu().numpy() # convert to predictions
+        allProbs.append(probs)
+    return np.concatenate(allProbs)
+def batchLoss(model, X, y, criterion, batchSize=1024):
+    totalLoss = 0
+    for i in range(0, len(X), batchSize):
+        Xb = X[i : i + batchSize]
+        yb = y[i : i + batchSize]
+        totalLoss += criterion(model(Xb), yb).item() * len(Xb) # criterion returns avg loss, multiply to get total
+    return totalLoss / len(X) # divide out to get overall avg loss
 
 # for early stopping and saving best model
 bestValLoss = 100
@@ -169,8 +194,8 @@ for _ in range(epochs):
     # validate (check for overfitting while training)
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
-        valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
-        valLoss = criterion(valLogits, y_val)
+        valProbs = batchProbs(model, X_val)
+        valLoss = log_loss(valTrue, valProbs)
 
     # check for early stopping
     if valLoss <= bestValLoss:
@@ -201,6 +226,8 @@ costScore = lstm.costScore(testTrue, testPreds)
 f1Score = f1_score(testTrue, testPreds, average="macro", zero_division=0)
 trainF1Score = f1_score(trainTrue, trainPreds, average="macro", zero_division=0)
 lossScore = criterion(testLogits, y_test).item()
+trainLossScore = batchLoss(model, X_train, y_train, criterion)
+logLoss = log_loss(testTrue, testProbs)
 rocAucScore = roc_auc_score(testTrue, testProbs, multi_class="ovr", average="macro")
 total, trainable = lstm.numParams(model)
 
@@ -213,6 +240,8 @@ print(f"Cost score: {costScore:.5f}")
 print(f"F1 score (macro-averaged): {f1Score:.5f}")
 print(f"Train F1 score: {trainF1Score:.5f}")
 print(f"Cost loss: {lossScore:.5f}")
+print(f"Train cost loss: {trainLossScore:.5f}")
+print(f"Log loss: {logLoss}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
@@ -223,7 +252,6 @@ if not os.path.exists(directory):
     os.makedirs(directory)
 filepath = os.path.join(directory, f"NN_{instrument}_{granularity}_{yearNow}.pth")
 torch.save(model.state_dict(), filepath)
-print("\nModel saved to: " + f"NN_{instrument}_{granularity}_{yearNow}.pth")
 
 # SAVE SCALER
 filepath = os.path.join(directory, f"scaler.pkl")

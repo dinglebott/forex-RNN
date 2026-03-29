@@ -1,0 +1,21 @@
+{
+    "features": [
+        "atr_14",
+        "high_return",
+        "hl_spread",
+        "low_return",
+        "vol_ratio",
+        "dist_ema100",
+        "adx_direction",
+        "ema_cross",
+        "vol_momentum",
+        "rsi_14",
+        "dist_ema50",
+        "dist_ema15",
+        "lower_wick",
+        "bb_position",
+        "close_return",
+        "smooth_return",
+        "volatility_regime"
+    ]
+}

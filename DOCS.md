@@ -95,6 +95,38 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 4.2
+*Changes from v4.1: Revert dataparser to flat threshold (18 pips), switch to log loss for early stopping and validation*\
+(this model is shit, it's just a checkpoint)
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["atr_14", "high_return", "hl_spread", "low_return", "vol_ratio", "dist_ema100", "adx_direction", "ema_cross", "vol_momentum", "rsi_14", "dist_ema50", "dist_ema15", "lower_wick", "bb_position", "close_return", "smooth_return", "volatility_regime"]\
+**Hyperparameters:**\
+hidden_size: 288\
+num_layers: 1\
+dropout: 0.14217\
+lookback: 15\
+optimiser: RMSprop\
+lr: 9.2945e-4\
+weight_decay: 1.6228e-4\
+batch_size: 512\
+clip_grad_norm: 4.9741\
+num_filters: 24\
+kernel_size: 5\
+**Cost matrix parameters:** 1.3, 0.02\
+**Cost score:** 0.50604\
+**F1 score (macro-averaged):** 0.38764\
+**Train F1 score:** 0.40493\
+**Log loss:** 1.09344\
+**ROC-AUC score:** 0.56711\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 146 | 185 | 124 |
+| Real ~ | 136 | 309 | 124 |
+| Real + | 178 | 175 | 158 |
+<br/>
+
 ### Model 4.1
 *Changes from v4: Broaden model (hidden_size)*\
 **Train:** 2005 - 2024\

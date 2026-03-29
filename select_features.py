@@ -14,21 +14,21 @@ with open("env.json", "r") as file:
     globalVars = json.load(file)
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
-hiddenSize = 128 # no. of neurons in hidden state
+hiddenSize = 256 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.3 # equivalent of subsample for RNN
-lookback = 20
+dropOut = 0.1266068 # equivalent of subsample for RNN
+lookback = 25
 optimiserName = "RMSprop"
-learningRate = 9e-4
-weightDecay = 5e-4
+learningRate = 0.0014844909156391459
+weightDecay = 0.00010861411252521372
 batchSize = 512
-clipGradNorm = 5.0
+clipGradNorm = 4.183114657907333
 # CNN params
 numFilters = 24
 kernelSize = 3
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 10
+earlyStoppingPatience = 20
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -140,7 +140,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for early stopping and saving best model
-bestValLoss = 100
+bestValLogLoss = 100
 badEpochs = 0
 bestModelState = None
 
@@ -148,30 +148,38 @@ bestModelState = None
 for epoch in range(epochs):
     # train
     model.train() # set model to training mode
-    epochLoss = 0 # initialise cumulative loss for this epoch
+    epochCostLoss = 0 # initialise cumulative loss for this epoch
+    epochLogLoss = 0 # initialise standard log loss
     for X_batch, y_batch in dataloader:
         optimiser.zero_grad() # clear gradients from previous batch
-        predictions = model(X_batch) # run the __call__ method which calls forward(X_batch)
-        loss = criterion(predictions, y_batch) # evaluate loss, returns loss tensor (1 element: the average loss across the batch)
-        loss.backward() # backpropagation, compute loss with respect to each parameter
+        logits = model(X_batch) # run the __call__ method which calls forward(X_batch)
+        costLoss = criterion(logits, y_batch) # evaluate loss, returns loss tensor (1 element: the average loss across the batch)
+        costLoss.backward() # backpropagation, compute loss with respect to each parameter
         nn.utils.clip_grad_norm_(model.parameters(), clipGradNorm) # prevent exploding gradients
         optimiser.step() # adjust gradients to minimise loss
-        epochLoss += loss.item() # convert tensor to normal number and add to cumulative loss
-    avgLoss = epochLoss / len(dataloader)
+        epochCostLoss += costLoss.item() # convert tensor to normal number and add to cumulative loss
+        # get standard log loss
+        with torch.no_grad():
+            probs = torch.softmax(logits, dim=1).cpu().numpy()
+        logLoss = log_loss(y_batch.cpu().numpy(), probs)
+        epochLogLoss += logLoss
+    avgCostLoss = epochCostLoss / len(dataloader)
+    avgLogLoss = epochLogLoss / len(dataloader)
     
     # validate (check for overfitting while training)
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
-        valLoss = criterion(valLogits, y_val).item()
+        valProbs = torch.softmax(valLogits, dim=1).cpu().numpy()
+        valLogLoss = log_loss(y_val.cpu().numpy(), valProbs)
         valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     valCostScore = lstm.costScore(valTrue, valPreds)
-    print(f"EPOCH {epoch + 1} | Train loss: {avgLoss:.4f} | Val loss: {valLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
+    print(f"EPOCH {epoch + 1} | Train cost loss: {avgCostLoss:.4f} | Train log loss: {avgLogLoss:.4f} | Val log loss: {valLogLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
 
     # check for early stopping
-    if valLoss <= bestValLoss:
-        bestValLoss = valLoss
+    if valLogLoss <= bestValLogLoss:
+        bestValLogLoss = valLogLoss
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:
@@ -181,7 +189,7 @@ for epoch in range(epochs):
             break
     
     # tune learning rate down
-    scheduler.step(valLoss)
+    scheduler.step(valLogLoss)
 # restore best model
 if bestModelState is not None:
     model.load_state_dict(bestModelState)
@@ -190,9 +198,10 @@ if bestModelState is not None:
 model.eval() # disable dropout
 with torch.no_grad(): # disable gradient tracking to save memory
     testLogits = model(X_test) # raw output of model => tensor of shape (samples, 3)
+    testProbs = torch.softmax(testLogits, dim=1).cpu().numpy()
     
 # EVALUATE MODEL
-baselineLoss = criterion(testLogits, y_test).item()
+baselineLoss = log_loss(y_test.cpu().numpy(), testProbs)
 
 # GET PERMUTATION IMPORTANCES
 model.eval()
@@ -209,8 +218,9 @@ for featureIdx in range(numFeatures):
         # predict with messed up feature column
         with torch.no_grad():
             logits = model(X_perm)
+            probs = torch.softmax(logits, dim=1).cpu().numpy()
         # record score for this iteration
-        score = criterion(logits, y_test).item()
+        score = log_loss(y_test.cpu().numpy(), probs)
         scores.append(score)
     # average score for this feature
     avgScore = np.mean(scores)
