@@ -134,15 +134,15 @@ def objective(trial):
         "hidden_size": trial.suggest_categorical("hidden_size", [350, 400, 450, 500, 550]),
         "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
-    dropout = trial.suggest_float("dropout", 0.05, 0.3) # for CNN
+    dropout = trial.suggest_float("dropout", 0.1, 0.4) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 5e-5, 8e-4)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 8e-4)
-    batchSize = trial.suggest_categorical("batch_size", [256, 384, 512])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
+    learningRate = trial.suggest_float("lr", 1e-5, 1e-4)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-4)
+    batchSize = trial.suggest_categorical("batch_size", [384, 512, 768])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 5.0, 7.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32, 64])
+        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 

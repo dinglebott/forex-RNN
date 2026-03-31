@@ -14,18 +14,18 @@ with open("env.json", "r") as file:
     globalVars = json.load(file)
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
-hiddenSize = 256 # no. of neurons in hidden state
-numLayers = 2 # no. of layers in the LSTM
+hiddenSize = 450 # no. of neurons in hidden state
+numLayers = 1 # no. of layers in the LSTM
 dropOut = 0.196242629 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 2e-4
-weightDecay = 4e-5
+learningRate = 8e-5
+weightDecay = 1.1834e-5
 batchSize = 512
-clipGradNorm = 5.113526073541128
+clipGradNorm = 5.753526073541128
 # CNN params
-numFilters = 24
-kernelSize = 5
+numFilters = 16
+kernelSize = 3
 # other
 epochs = 80 # early stopping implemented
 earlyStoppingPatience = 10
