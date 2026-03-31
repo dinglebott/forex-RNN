@@ -49,7 +49,7 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.0002] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 '''featureList = [
     "high_return", "low_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -245,6 +245,11 @@ print(f"Log loss: {logLoss}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
+
+for true_class, name in enumerate(["down", "flat", "up"]):
+    mask = testTrue == true_class
+    avg_probs = testProbs[mask].mean(axis=0)
+    print(f"True={name}: avg P(down)={avg_probs[0]:.3f} P(flat)={avg_probs[1]:.3f} P(up)={avg_probs[2]:.3f}")
 
 # SAVE MODEL
 directory = "models"

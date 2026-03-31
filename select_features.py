@@ -16,16 +16,16 @@ yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
 hiddenSize = 256 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.1266068 # equivalent of subsample for RNN
-lookback = 25
+dropOut = 0.14216933523347478 # equivalent of subsample for RNN
+lookback = 20
 optimiserName = "RMSprop"
-learningRate = 0.0014844909156391459
-weightDecay = 0.00010861411252521372
+learningRate = 8e-4
+weightDecay = 0.00016228614507848545
 batchSize = 512
-clipGradNorm = 4.183114657907333
+clipGradNorm = 4.974053049380174
 # CNN params
 numFilters = 24
-kernelSize = 3
+kernelSize = 5
 # other
 epochs = 80 # early stopping implemented
 earlyStoppingPatience = 20
@@ -172,10 +172,11 @@ for epoch in range(epochs):
         valLogits = model(X_val) # raw output of model => tensor of shape (samples, 3)
         valProbs = torch.softmax(valLogits, dim=1).cpu().numpy()
         valLogLoss = log_loss(y_val.cpu().numpy(), valProbs)
+        valCostLoss = criterion(valLogits, y_val)
         valPreds = torch.argmax(valLogits, dim=1).cpu().numpy() # convert to predictions
     valF1Score = f1_score(valTrue, valPreds, average="macro", zero_division=0)
     valCostScore = lstm.costScore(valTrue, valPreds)
-    print(f"EPOCH {epoch + 1} | Train cost loss: {avgCostLoss:.4f} | Train log loss: {avgLogLoss:.4f} | Val log loss: {valLogLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
+    print(f"EPOCH {epoch + 1} | Train cost loss: {avgCostLoss:.4f} | Val cost loss: {valCostLoss:.4f} | Train log loss: {avgLogLoss:.4f} | Val log loss: {valLogLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
 
     # check for early stopping
     if valLogLoss <= bestValLogLoss:

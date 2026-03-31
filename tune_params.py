@@ -46,7 +46,7 @@ filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0.0002] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
 '''featureList = [
     "high_return", "low_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -131,18 +131,18 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [224, 256, 288]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [192, 224, 256, 288]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
     dropout = trial.suggest_float("dropout", 0.08, 0.18) # for CNN
-    lookback = trial.suggest_categorical("lookback", [15, 20, 25])
+    lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 4e-4, 2e-3)
+    learningRate = trial.suggest_float("lr", 1e-4, 2e-3)
     weightDecay = trial.suggest_float("weight_decay", 5e-5, 3e-4)
-    batchSize = trial.suggest_categorical("batch_size", [384, 512])
+    batchSize = trial.suggest_categorical("batch_size", [256, 384, 512])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [24, 32, 48])
+        numFilters = trial.suggest_categorical("num_filters", [24, 32])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
@@ -155,10 +155,9 @@ def objective(trial):
     testScores = []
     for trainIdxs, valIdxs in trainValSplit.split(X_train):
         # SPLIT TRAIN AND VALIDATION SETS
-        purgedTrainIndexes = trainIdxs[:-4] # prevent leaking from candlesAhead
-        X_fold_train = X_train[purgedTrainIndexes]
+        X_fold_train = X_train[trainIdxs]
         X_fold_val = X_train[valIdxs]
-        y_fold_train = y_train[purgedTrainIndexes]
+        y_fold_train = y_train[trainIdxs]
         y_fold_val = y_train[valIdxs]
 
         # INSTANTIATE MODEL
@@ -241,7 +240,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=60, show_progress_bar=True)
+study.optimize(objective, n_trials=80, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

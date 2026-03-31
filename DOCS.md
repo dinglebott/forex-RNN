@@ -95,6 +95,38 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 5
+*Changes from v4.2: Reduce lookahead window to 2*\
+(this model is also quite shit)
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["atr_14", "volatility_regime", "vol_ratio", "vol_momentum", "ema_cross", "adx_direction", "open_return", "close_return", "upper_wick", "lower_wick", "rsi_14", "dist_ema15", "oc_spread", "bb_width", "high_return", "dist_ema50", "hl_spread", "vol_return"]\
+**Hyperparameters:**\
+hidden_size: 288\
+num_layers: 1\
+dropout: 0.17467\
+lookback: 20\
+optimiser: RMSprop\
+lr: 5.0250e-4\
+weight_decay: 2.2217e-4\
+batch_size: 512\
+clip_grad_norm: 4.5026\
+num_filters: 24\
+kernel_size: 3\
+**Cost matrix parameters:** 1.3, 0.02\
+**Cost score:** 0.51790\
+**F1 score (macro-averaged):** 0.38712\
+**Train F1 score:** 0.41988\
+**Log loss:** 1.0863\
+**ROC-AUC score:** 0.57625\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 171 | 206 | 123 |
+| Real ~ | 116 | 273 | 106 |
+| Real + | 186 | 193 | 158 |
+<br/>
+
 ### Model 4.2
 *Changes from v4.1: Revert dataparser to flat threshold (18 pips), switch to log loss for early stopping and validation*\
 (this model is shit, it's just a checkpoint)

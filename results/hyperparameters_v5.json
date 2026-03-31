@@ -1,0 +1,23 @@
+{
+    "modelParams": {
+        "hidden_size": 288,
+        "num_layers": 1,
+        "dropout": 0.1746662695415037,
+        "num_filters": 24,
+        "kernel_size": 3
+    },
+    "lookback": 20,
+    "allParams": {
+        "hidden_size": 288,
+        "num_layers": 1,
+        "dropout": 0.1746662695415037,
+        "lookback": 20,
+        "optimiser": "RMSprop",
+        "lr": 0.0005025020548476858,
+        "weight_decay": 0.0002221650377547981,
+        "batch_size": 512,
+        "clip_grad_norm": 4.502640714563245,
+        "num_filters": 24,
+        "kernel_size": 3
+    }
+}
