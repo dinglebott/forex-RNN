@@ -97,7 +97,7 @@ def parseData(jsonPath):
         avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
-    df["rsi_14"] = rsi(df["close_smooth"]) - 50
+    df["rsi_14"] = rsi(df["close"]) - 50
     # MACD histogram
     macd = getEma(12) - getEma(26)
     macd_signal = macd.ewm(span=9, adjust=False).mean()
@@ -134,7 +134,7 @@ def parseData(jsonPath):
     df["adx_direction"] = df["di_diff"] * df["adx"] / 100
 
     # TARGET VARIABLE
-    df["forward_return"] = df["close"].shift(-3) - df["close"]
+    df["forward_return"] = df["close"].shift(-2) - df["close"]
     conditions = [
         df["forward_return"] < -0.001, # downward move
         df["forward_return"] > 0.001 # upward move

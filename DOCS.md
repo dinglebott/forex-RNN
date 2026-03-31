@@ -95,6 +95,37 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 5.1
+*Changes from v5: I forgor*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["vol_ratio", "volatility_regime", "ema_cross", "upper_wick", "rsi_14", "atr_14", "open_return", "dist_ema15", "lower_wick", "smooth_return", "vol_momentum", "adx_direction", "vol_return", "close_return"]\
+**Hyperparameters:**\
+hidden_size: 450\
+num_layers: 1\
+dropout: 0.25976\
+lookback: 20\
+optimiser: RMSprop\
+lr: 5.3254e-4\
+weight_decay: 1.1834e-4\
+batch_size: 512\
+clip_grad_norm: 5.7585\
+num_filters: 16\
+kernel_size: 3\
+**Cost matrix parameters:** 1.3, 0.02\
+**Cost score:** 0.53381\
+**F1 score (macro-averaged):** 0.40440\
+**Train F1 score:** 0.42560\
+**Log loss:** 1.0889\
+**ROC-AUC score:** 0.58318\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 175 | 193 | 132 |
+| Real ~ | 122 | 266 | 107 |
+| Real + | 171 | 182 | 184 |
+<br/>
+
 ### Model 5
 *Changes from v4.2: Reduce lookahead window to 2*\
 (this model is also quite shit)

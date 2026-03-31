@@ -15,20 +15,20 @@ with open("env.json", "r") as file:
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
 hiddenSize = 256 # no. of neurons in hidden state
-numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.14216933523347478 # equivalent of subsample for RNN
+numLayers = 2 # no. of layers in the LSTM
+dropOut = 0.196242629 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 8e-4
-weightDecay = 0.00016228614507848545
+learningRate = 2e-4
+weightDecay = 4e-5
 batchSize = 512
-clipGradNorm = 4.974053049380174
+clipGradNorm = 5.113526073541128
 # CNN params
 numFilters = 24
 kernelSize = 5
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 20
+earlyStoppingPatience = 10
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -140,7 +140,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batchSize, shuffle=
 # DataLoader returns an iterator that yields batches as a tuple of tensors (X_batch, y_batch)
 
 # for early stopping and saving best model
-bestValLogLoss = 100
+bestValCostLoss = 100
 badEpochs = 0
 bestModelState = None
 
@@ -179,8 +179,8 @@ for epoch in range(epochs):
     print(f"EPOCH {epoch + 1} | Train cost loss: {avgCostLoss:.4f} | Val cost loss: {valCostLoss:.4f} | Train log loss: {avgLogLoss:.4f} | Val log loss: {valLogLoss:.4f} | F1: {valF1Score:.4f} | Cost score: {valCostScore:.4f}")
 
     # check for early stopping
-    if valLogLoss <= bestValLogLoss:
-        bestValLogLoss = valLogLoss
+    if valCostLoss <= bestValCostLoss:
+        bestValCostLoss = valCostLoss
         badEpochs = 0
         bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
     else:

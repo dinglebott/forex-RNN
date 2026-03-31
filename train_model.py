@@ -22,7 +22,7 @@ print(f"Hyperparameters: {hyperparameters['allParams']}")
 hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDecay, batchSize, clipGradNorm, numFilters, kernelSize = hyperparameters["allParams"].values()
 # other
 epochs = 100 # early stopping implemented
-earlyStoppingPatience = 25
+earlyStoppingPatience = 15
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",

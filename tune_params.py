@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
-from sklearn.metrics import f1_score, log_loss
+from sklearn.metrics import log_loss
 import os
 import json
 
@@ -16,7 +16,7 @@ with open("env.json", "r") as file:
 yearNow, instrument, granularity, arch, _ = globalVars.values()
 # other
 epochs = 80 # early stopping implemented
-earlyStoppingPatience = 20
+earlyStoppingPatience = 10
 featureList = [
     "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
     "atr_14", "volatility_regime",
@@ -97,7 +97,7 @@ def getSequences(fts, lbls, lookback, key): # key to differentiate train and tes
     return sequenceCache[cacheKey]
 
 # TRAIN TEST SPLIT (created within objective)
-trainValSplit = TimeSeriesSplit(n_splits=3)
+trainValSplit = TimeSeriesSplit(n_splits=2)
 
 # BUILD MODEL (instantiated within objective)
 ForexRNN, ForexHybrid = lstm.classBuilder()
@@ -131,18 +131,18 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [192, 224, 256, 288]),
-        "num_layers": trial.suggest_categorical("num_layers", [1])
+        "hidden_size": trial.suggest_categorical("hidden_size", [350, 400, 450, 500, 550]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
-    dropout = trial.suggest_float("dropout", 0.08, 0.18) # for CNN
+    dropout = trial.suggest_float("dropout", 0.05, 0.3) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-4, 2e-3)
-    weightDecay = trial.suggest_float("weight_decay", 5e-5, 3e-4)
+    learningRate = trial.suggest_float("lr", 5e-5, 8e-4)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 8e-4)
     batchSize = trial.suggest_categorical("batch_size", [256, 384, 512])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 4.0, 6.0)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [24, 32])
+        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32, 64])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
@@ -195,6 +195,7 @@ def objective(trial):
         bestValLoss = 100
         badEpochs = 0
         bestModelState = None
+        valLosses = []
 
         # training loop
         for _ in range(epochs):
@@ -213,6 +214,7 @@ def objective(trial):
             with torch.no_grad(): # disable gradient tracking to save memory
                 valProbs = batchProbs(model, X_fold_val)
                 valLoss = log_loss(y_fold_val.cpu().numpy(), valProbs)
+                valLosses.append(valLoss)
 
             # check for early stopping
             if valLoss <= bestValLoss:
@@ -226,21 +228,24 @@ def objective(trial):
             
             # tune learning rate down if plateauing
             scheduler.step(valLoss)
+        
         # restore best model
         if bestModelState is not None:
             model.load_state_dict(bestModelState)
 
         # EVALUATE MODEL
-        testScores.append(bestValLoss)
+        # report stable score of last 5 epochs instead of lucky best epoch
+        stableScore = np.mean(valLosses[-5:]) if len(valLosses) >= 5 else np.mean(valLosses)
+        testScores.append(stableScore)
     
     # print train and test F1 for overfitting check
     print(f"Trial {trial.number} | Loss: {np.mean(testScores):.5f}")
-
+    
     return np.mean(testScores)
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=80, show_progress_bar=True)
+study.optimize(objective, n_trials=100, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
