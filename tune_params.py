@@ -6,7 +6,6 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 import copy
-from sklearn.metrics import log_loss
 import os
 import json
 
@@ -72,10 +71,6 @@ splitIdx = timestamps.index.get_loc(splitIdx) # realign indexes
 features_train = features.iloc[:splitIdx]
 labels_train = labels.iloc[:splitIdx].values # convert to numpy array for correct indexing in createSequences()
 
-# SCALE FEATURES
-scaler = StandardScaler()
-features_train = scaler.fit_transform(features_train)
-
 # DATA SEQUENCES (created within objective)
 def createSequences(fts, lbls, lookback):
     X, y = [], []
@@ -83,21 +78,6 @@ def createSequences(fts, lbls, lookback):
         X.append(fts[i : i + lookback])
         y.append(lbls[i + lookback])
     return np.array(X), np.array(y)
-
-# cache sequences to avoid rebuilding each trial (also converts to tensors)
-sequenceCache = {}
-def getSequences(fts, lbls, lookback, key): # key to differentiate train and test with same lookback
-    cacheKey = (lookback, key)
-    if cacheKey not in sequenceCache:
-        X, y = createSequences(fts, lbls, lookback)
-        sequenceCache[cacheKey] = (
-            torch.tensor(X, dtype=torch.float32, device=device),
-            torch.tensor(y, dtype=torch.long, device=device)
-        )
-    return sequenceCache[cacheKey]
-
-# TRAIN TEST SPLIT (created within objective)
-trainValSplit = TimeSeriesSplit(n_splits=2)
 
 # BUILD MODEL (instantiated within objective)
 ForexRNN, ForexHybrid = lstm.classBuilder()
@@ -146,20 +126,40 @@ def objective(trial):
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
-    # CREATE SEQUENCES (already converted to tensors by function)
-    X_train, y_train = getSequences(features_train, labels_train, lookback, key="train")
-    # shape of X: (samples, timesteps, features)
-    # shape of y: (samples, output_classes)
+    # TRAIN TEST SPLIT
+    def expandingWindowSplit(n_samples, n_splits, val_ratio):
+        splits = []
+        for f in range(n_splits):
+            trainEnd = int((1 - (n_splits - f) * val_ratio) * n_samples)
+            valEnd = int(trainEnd + (val_ratio * n_samples))
+            trainIdx = range(trainEnd)
+            valIdx = range(trainEnd, valEnd)
+            splits.append((trainIdx, valIdx))
+        return splits
+
+    trainValSplit = expandingWindowSplit(len(features_train), 3, 0.1)
 
     # SUBFOLD LOOP
     testScores = []
-    for trainIdxs, valIdxs in trainValSplit.split(X_train):
-        # SPLIT TRAIN AND VALIDATION SETS
-        X_fold_train = X_train[trainIdxs]
-        X_fold_val = X_train[valIdxs]
-        y_fold_train = y_train[trainIdxs]
-        y_fold_val = y_train[valIdxs]
-
+    for trainIdxs, valIdxs in trainValSplit:
+        # SPLIT TRAIN AND VALIDATION FEATURES/LABELS
+        features_fold_train = features_train.iloc[trainIdxs]
+        labels_fold_train = labels_train[trainIdxs]
+        features_fold_val = features_train.iloc[valIdxs]
+        labels_fold_val = labels_train[valIdxs]
+        # SCALE FEATURES
+        scaler = StandardScaler()
+        features_fold_train = scaler.fit_transform(features_fold_train)
+        features_fold_val = scaler.transform(features_fold_val)
+        # CREATE SEQUENCES
+        X_fold_train, y_fold_train = createSequences(features_fold_train, labels_fold_train, lookback)
+        X_fold_val, y_fold_val = createSequences(features_fold_val, labels_fold_val, lookback)
+        # CONVERT TO TENSORS
+        X_fold_train = torch.tensor(X_fold_train, dtype=torch.float32, device=device)
+        y_fold_train = torch.tensor(y_fold_train, dtype=torch.long, device=device)
+        X_fold_val = torch.tensor(X_fold_val, dtype=torch.float32, device=device)
+        y_fold_val = torch.tensor(y_fold_val, dtype=torch.long, device=device)
+        
         # INSTANTIATE MODEL
         match arch:
             case 0:
@@ -182,7 +182,7 @@ def objective(trial):
 
         # LOSS FUNCTION AND OPTIMISER
         criterion, optimiser, scheduler, _ = lstm.optimiserBundle(
-            model, labels_train, device,
+            model, labels_fold_train, device,
             optimiserName, learningRate, weightDecay
         )
 
@@ -194,7 +194,6 @@ def objective(trial):
         # for early stopping
         bestValLoss = 100
         badEpochs = 0
-        bestModelState = None
         valLosses = []
 
         # training loop
@@ -212,15 +211,13 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valProbs = batchProbs(model, X_fold_val)
-                valLoss = log_loss(y_fold_val.cpu().numpy(), valProbs)
+                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
                 valLosses.append(valLoss)
 
             # check for early stopping
             if valLoss <= bestValLoss:
                 bestValLoss = valLoss
                 badEpochs = 0
-                bestModelState = copy.deepcopy(model.state_dict()) # shallow copy retains references to original tensors
             else:
                 badEpochs += 1
                 if badEpochs >= earlyStoppingPatience:
@@ -228,24 +225,18 @@ def objective(trial):
             
             # tune learning rate down if plateauing
             scheduler.step(valLoss)
-        
-        # restore best model
-        if bestModelState is not None:
-            model.load_state_dict(bestModelState)
 
         # EVALUATE MODEL
         # report stable score of last 5 epochs instead of lucky best epoch
         stableScore = np.mean(valLosses[-5:]) if len(valLosses) >= 5 else np.mean(valLosses)
         testScores.append(stableScore)
     
-    # print train and test F1 for overfitting check
-    print(f"Trial {trial.number} | Loss: {np.mean(testScores):.5f}")
-    
+    # RETURN TO OPTUNA
     return np.mean(testScores)
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=100, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
