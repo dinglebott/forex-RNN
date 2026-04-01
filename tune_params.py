@@ -111,15 +111,15 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [350, 400, 450, 500, 550]),
-        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
+        "hidden_size": trial.suggest_categorical("hidden_size", [400]),
+        "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.1, 0.4) # for CNN
+    dropout = trial.suggest_float("dropout", 0.1, 0.25) # for CNN
     lookback = trial.suggest_categorical("lookback", [20])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 1e-5, 1e-4)
-    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-4)
-    batchSize = trial.suggest_categorical("batch_size", [384, 512, 768])
+    learningRate = trial.suggest_float("lr", 4e-5, 1e-4)
+    weightDecay = trial.suggest_float("weight_decay", 8e-6, 1e-4)
+    batchSize = trial.suggest_categorical("batch_size", [512, 768, 1024])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 5.0, 7.0)
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [16, 24, 32])

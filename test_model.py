@@ -133,5 +133,8 @@ print(f"Log loss: {logLossScore:.5f}")
 print(f"ROC-AUC score: {rocAucScore:.5f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
-with np.printoptions(threshold=50):
-    print(probs)
+
+for true_class, name in enumerate(["down", "flat", "up"]):
+    mask = testTrue == true_class
+    avg_probs = probs[mask].mean(axis=0)
+    print(f"True={name}: avg P(down)={avg_probs[0]:.3f} P(flat)={avg_probs[1]:.3f} P(up)={avg_probs[2]:.3f}")
