@@ -27,8 +27,8 @@ High return => ln(H / previous C)\
 Low return => ln(L / previous C)\
 Close return => ln(C / previous C)\
 Volume return => ln(V / previous V)\
-Smooth return => ln(smoothed C / previous smoothed C)
-Dist smooth => ln(C / smoothed C)
+Smooth return => ln(smoothed C / previous smoothed C)\
+Dist smooth => ln(C / smoothed C)\
 *Volume and smoothed C have been smoothed by Ehler's UltimateSmoother algorithm*\
 **Structure:**\
 High-low spread => ln(H - L)\
