@@ -53,6 +53,7 @@ def parseData(jsonPath):
     df["close_smooth"] = ultimateSmoother(df["close"])[:len(df)]
     # smoothed features
     df["smooth_return"] = np.log(df["close_smooth"] / df["close_smooth"].shift(1))
+    df["dist_smooth"] = np.log(df["close"] / df["close_smooth"])
     
     # ADD FEATURES
     # helper
