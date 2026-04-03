@@ -59,6 +59,7 @@ scaler = joblib.load(filepath)
 
 # PARSE TEST DATA
 df = dataparser.parseData(os.path.join("json_data", f"{instrument}_{granularity}_{yearNow - 21}-01-01_{yearNow}-01-01.json"))
+df = dataparser.addTarget(df)
 timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
