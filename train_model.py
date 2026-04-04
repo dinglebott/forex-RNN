@@ -24,12 +24,13 @@ hiddenSize, numLayers, dropOut, lookback, optimiserName, learningRate, weightDec
 epochs = 100 # early stopping implemented
 earlyStoppingPatience = 15
 featureList = [
-    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return", "dist_smooth",
     "atr_14", "volatility_regime",
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
     "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction",
+    "dist_high", "dist_low"
 ]
 
 # use CUDA if available, otherwise use CPU
@@ -51,15 +52,13 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
-'''featureList = [
-    "high_return", "low_return", "vol_return", "smooth_return",
-    "atr_14", "volatility_regime",
-    "upper_wick", "lower_wick",
-    "dist_ema15", "dist_ema50", "ema_cross",
-    "rsi_14", "macd_hist",
+featureList = [
+    "adx_direction", "ema_cross", "bb_position", "macd_hist",
+    "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
+    "volatility_regime", "bb_width", "atr_14",
     "vol_ratio", "vol_momentum",
-    "adx_direction"
-]'''  # for manual feature setting (comment out when not needed)
+    "smooth_return", "dist_smooth"
+] # for manual feature setting (comment out when not needed)
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -195,8 +194,7 @@ for _ in range(epochs):
     # validate (check for overfitting while training)
     model.eval() # disable dropout
     with torch.no_grad(): # disable gradient tracking to save memory
-        valProbs = batchProbs(model, X_val)
-        valLoss = log_loss(valTrue, valProbs)
+        valLoss = batchLoss(model, X_val, y_val, criterion) # cost loss
 
     # check for early stopping
     if valLoss <= bestValLoss:
@@ -237,13 +235,13 @@ cmatrix = confusion_matrix(testTrue, testPreds)
 cmatrixDf = pd.DataFrame(cmatrix, index=["Real -", "Real ~", "Real +"], columns=["Pred -", "Pred ~", "Pred +"])
 cmatrixDf["Count"] = cmatrixDf.sum(axis=1)
 cmatrixDf.loc["Count"] = cmatrixDf.sum(axis=0)
-print(f"Cost score: {costScore:.5f}")
-print(f"F1 score (macro-averaged): {f1Score:.5f}")
-print(f"Train F1 score: {trainF1Score:.5f}")
-print(f"Cost loss: {lossScore:.5f}")
-print(f"Train cost loss: {trainLossScore:.5f}")
-print(f"Log loss: {logLoss}")
-print(f"ROC-AUC score: {rocAucScore:.5f}")
+print(f"Cost score: {costScore:.4f}")
+print(f"F1 score (macro-averaged): {f1Score:.4f}")
+print(f"Train F1 score: {trainF1Score:.4f}")
+print(f"Cost loss: {lossScore:.4f}")
+print(f"Train cost loss: {trainLossScore:.4f}")
+print(f"Log loss: {logLoss:.4f}")
+print(f"ROC-AUC score: {rocAucScore:.4f}")
 print(f"Confusion matrix:\n{cmatrixDf}")
 print(f"\nModel size: {trainable}")
 

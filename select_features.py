@@ -16,11 +16,11 @@ yearNow, instrument, granularity, arch, _ = globalVars.values()
 # hyperparameters
 hiddenSize = 450 # no. of neurons in hidden state
 numLayers = 1 # no. of layers in the LSTM
-dropOut = 0.196242629 # equivalent of subsample for RNN
+dropOut = 0.26 # equivalent of subsample for RNN
 lookback = 20
 optimiserName = "RMSprop"
-learningRate = 8e-5
-weightDecay = 1.1834e-5
+learningRate = 5e-5
+weightDecay = 1.1834e-4
 batchSize = 512
 clipGradNorm = 5.753526073541128
 # CNN params
@@ -30,12 +30,13 @@ kernelSize = 3
 epochs = 80 # early stopping implemented
 earlyStoppingPatience = 10
 featureList = [
-    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return", "dist_smooth",
     "atr_14", "volatility_regime",
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
     "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction",
+    "dist_high", "dist_low"
 ]
 
 # use CUDA if available, otherwise use CPU

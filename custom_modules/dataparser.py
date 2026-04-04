@@ -94,8 +94,8 @@ def parseData(jsonPath):
     # RSI
     def rsi(series, n=14):
         delta = series.diff()
-        avgGain = delta.clip(lower=0).rolling(n).mean()
-        avgLoss = (-delta.clip(upper=0)).rolling(n).mean()
+        avgGain = delta.clip(lower=0).ewm(alpha=1/n, min_periods=n, adjust=False).mean()
+        avgLoss = (-delta.clip(upper=0)).ewm(alpha=1/n, min_periods=n, adjust=False).mean()
         relativeStrength = avgGain / avgLoss
         return 100 - (100 / (1 + relativeStrength))
     df["rsi_14"] = rsi(df["close"]) - 50
@@ -133,6 +133,74 @@ def parseData(jsonPath):
     df["plus_di"], df["minus_di"], df["adx"] = adx(df, period=14)
     df["di_diff"] = df["plus_di"] - df["minus_di"]
     df["adx_direction"] = df["di_diff"] * df["adx"] / 100
+    # Support/resistance detection
+    def detectSwingPoints(close: pd.Series, n: int = 5) -> tuple[pd.Series, pd.Series]:
+        roll_max = close.rolling(window=2 * n + 1, center=True).max()
+        roll_min = close.rolling(window=2 * n + 1, center=True).min()
+
+        swing_highs = close.where(close == roll_max) # NaN everywhere else
+        swing_lows  = close.where(close == roll_min)
+
+        return swing_highs, swing_lows
+
+    def computeSwingDistances(
+        close: pd.Series,
+        atr: pd.Series,
+        swing_highs: pd.Series,
+        swing_lows: pd.Series,
+        lookback: int = 100,
+    ) -> pd.DataFrame:
+        n = len(close)
+        dist_high = np.full(n, np.nan)
+        dist_low  = np.full(n, np.nan)
+
+        swing_high_vals = swing_highs.to_numpy()
+        swing_low_vals  = swing_lows.to_numpy()
+        close_vals      = close.to_numpy()
+        atr_vals        = atr.to_numpy()
+
+        for t in range(n):
+            start = max(0, t - lookback)
+
+            # Slice the lookback window, excluding t itself (causal)
+            window_highs = swing_high_vals[start:t]
+            window_lows  = swing_low_vals[start:t]
+
+            # Extract confirmed swing prices (non-NaN entries)
+            prior_highs = window_highs[~np.isnan(window_highs)]
+            prior_lows  = window_lows[~np.isnan(window_lows)]
+
+            if atr_vals[t] == 0 or np.isnan(atr_vals[t]):
+                continue
+
+            if len(prior_highs) > 0:
+                nearest_high   = prior_highs[np.argmin(np.abs(prior_highs - close_vals[t]))]
+                dist_high[t]   = (nearest_high - close_vals[t]) / atr_vals[t]
+
+            if len(prior_lows) > 0:
+                nearest_low   = prior_lows[np.argmin(np.abs(prior_lows - close_vals[t]))]
+                dist_low[t]   = (close_vals[t] - nearest_low) / atr_vals[t]
+
+        return pd.DataFrame(
+            {"dist_high": dist_high, "dist_low": dist_low},
+            index=close.index,
+        )
+    
+    swing_highs, swing_lows = detectSwingPoints(df["close"], n=5)
+    swing_distances = computeSwingDistances(
+        close=df["close"],
+        atr=df["atr_14"],
+        swing_highs=swing_highs,
+        swing_lows=swing_lows,
+        lookback=100
+    )
+
+    df = pd.concat([df, swing_distances], axis=1)
+
+    # lagged features
+    for lag in range(1, 4):
+        df[f"close_lag{lag}"] = df["close_return"].shift(lag)
+        df[f"vol_lag{lag}"] = df["vol_return"].shift(lag)
 
     # drop empty rows and return
     df.dropna(inplace=True)

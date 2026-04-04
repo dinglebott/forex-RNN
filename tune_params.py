@@ -15,12 +15,13 @@ yearNow, instrument, granularity, arch, _ = globalVars.values()
 epochs = 80 # early stopping implemented
 earlyStoppingPatience = 10
 featureList = [
-    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return",
+    "open_return", "high_return", "low_return", "close_return", "vol_return", "smooth_return", "dist_smooth",
     "atr_14", "volatility_regime",
     "bb_width", "bb_position",
     "hl_spread", "oc_spread", "upper_wick", "lower_wick",
     "dist_ema15", "dist_ema50", "dist_ema100", "ema_cross",
-    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction"
+    "rsi_14", "macd_hist", "vol_ratio", "vol_momentum", "adx_direction",
+    "dist_high", "dist_low"
 ]
 
 # use CUDA if available, otherwise use CPU
@@ -45,15 +46,13 @@ with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
-'''featureList = [
-    "high_return", "low_return", "vol_return", "smooth_return",
-    "atr_14", "volatility_regime",
-    "upper_wick", "lower_wick",
-    "dist_ema15", "dist_ema50", "ema_cross",
-    "rsi_14", "macd_hist",
+featureList = [
+    "adx_direction", "ema_cross", "bb_position", "macd_hist",
+    "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
+    "volatility_regime", "bb_width", "atr_14",
     "vol_ratio", "vol_momentum",
-    "adx_direction"
-]''' # for manual feature setting (comment out when not needed)
+    "smooth_return", "dist_smooth"
+] # for manual feature setting (comment out when not needed)
 print(f"Best {len(featureList)} features:", featureList)
 features = df[featureList]
 labels = df["target"]
@@ -110,18 +109,18 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [400]),
+        "hidden_size": trial.suggest_categorical("hidden_size", [512]),
         "num_layers": trial.suggest_categorical("num_layers", [1])
     }
-    dropout = trial.suggest_float("dropout", 0.1, 0.25) # for CNN
-    lookback = trial.suggest_categorical("lookback", [20])
+    dropout = trial.suggest_float("dropout", 0.05, 0.15) # for CNN
+    lookback = trial.suggest_categorical("lookback", [15, 20, 25])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 4e-5, 1e-4)
-    weightDecay = trial.suggest_float("weight_decay", 8e-6, 1e-4)
-    batchSize = trial.suggest_categorical("batch_size", [512, 768, 1024])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 5.0, 7.0)
+    learningRate = trial.suggest_float("lr", 9e-5, 1e-4)
+    weightDecay = trial.suggest_float("weight_decay", 9.5e-5, 1.5e-4)
+    batchSize = trial.suggest_categorical("batch_size", [512])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 5.5, 6.5)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [16, 24, 32])
+        numFilters = trial.suggest_categorical("num_filters", [16, 24])
         kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
@@ -210,7 +209,7 @@ def objective(trial):
             # validate (check for overfitting while training)
             model.eval() # disable dropout
             with torch.no_grad(): # disable gradient tracking to save memory
-                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion)
+                valLoss = batchLoss(model, X_fold_val, y_fold_val, criterion) # cost loss
                 valLosses.append(valLoss)
 
             # check for early stopping
@@ -235,7 +234,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=50, show_progress_bar=True)
+study.optimize(objective, n_trials=30, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
