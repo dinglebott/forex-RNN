@@ -96,6 +96,37 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 5.2
+*Changes from v5.1: Fix RSI in dataparser*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["adx_direction", "ema_cross", "bb_position", "macd_hist", "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14", "volatility_regime", "bb_width", "atr_14", "vol_ratio", "vol_momentum", "smooth_return", "dist_smooth"]\
+**Hyperparameters:**\
+hidden_size: 512\
+num_layers: 1\
+dropout: 0.1\
+lookback: 20\
+optimiser: RMSprop\
+lr: 1e-4\
+weight_decay: 9.9e-5\
+batch_size: 512\
+clip_grad_norm: 5.75\
+num_filters: 24\
+kernel_size: 3\
+**Cost matrix parameters:** 1.3, 0.02\
+**Cost score:** 0.5346\
+**F1 score (macro-averaged):** 0.3975\
+**Train F1 score:** 0.4180\
+**Log loss:** 1.0818\
+**ROC-AUC score:** 0.5783\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 166 | 212 | 122 |
+| Real ~ | 122 | 274 | 107 |
+| Real + | 167 | 193 | 177 |
+<br/>
+
 ### Model 5.1
 *Changes from v5: I forgor*\
 **Train:** 2005 - 2024\
