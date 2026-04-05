@@ -47,11 +47,11 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-filepath = os.path.join("results", "features.json")
+'''filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract top n features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only'''
 featureList = [
     "adx_direction", "ema_cross", "bb_position", "macd_hist",
     "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
