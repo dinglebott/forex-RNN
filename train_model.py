@@ -53,6 +53,7 @@ with open(filepath, "r") as file:
 # extract top n features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only'''
 featureList = [
+    "high_return", "low_return",
     "adx_direction", "ema_cross", "bb_position", "macd_hist",
     "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
     "volatility_regime", "bb_width", "atr_14",

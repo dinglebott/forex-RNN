@@ -41,11 +41,11 @@ timestamps = df["time"] # separate timestamps to avoid scaling
 df.drop(columns=["time"], inplace=True)
 
 # GET FEATURES AND LABELS (input and output)
-filepath = os.path.join("results", "features.json")
+'''filepath = os.path.join("results", "features.json")
 with open(filepath, "r") as file:
     rawFeatures = json.load(file) # rawFeatures is a python dict
 # extract positive features into list
-featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only
+featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only'''
 featureList = [
     "adx_direction", "ema_cross", "bb_position", "macd_hist",
     "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
@@ -109,19 +109,19 @@ def batchLoss(model, X, y, criterion, batchSize=1024):
 def objective(trial):
     # PARAMS TO TUNE
     params = {
-        "hidden_size": trial.suggest_categorical("hidden_size", [512]),
-        "num_layers": trial.suggest_categorical("num_layers", [1])
+        "hidden_size": trial.suggest_categorical("hidden_size", [460, 480, 500, 520, 540]),
+        "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
-    dropout = trial.suggest_float("dropout", 0.05, 0.15) # for CNN
-    lookback = trial.suggest_categorical("lookback", [15, 20, 25])
+    dropout = trial.suggest_float("dropout", 0.05, 0.2) # for CNN
+    lookback = trial.suggest_categorical("lookback", [20, 25])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
-    learningRate = trial.suggest_float("lr", 9e-5, 1e-4)
-    weightDecay = trial.suggest_float("weight_decay", 9.5e-5, 1.5e-4)
-    batchSize = trial.suggest_categorical("batch_size", [512])
+    learningRate = trial.suggest_float("lr", 5e-5, 4e-4)
+    weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-4)
+    batchSize = trial.suggest_categorical("batch_size", [384, 512, 768, 1024])
     clipGradNorm = trial.suggest_float("clip_grad_norm", 5.5, 6.5)
     if arch == 1:
-        numFilters = trial.suggest_categorical("num_filters", [16, 24])
-        kernelSize = trial.suggest_categorical("kernel_size", [3, 5])
+        numFilters = trial.suggest_categorical("num_filters", [64, 96, 128])
+        kernelSize = trial.suggest_categorical("kernel_size", [5, 7, 9])
         lstmDropout = dropout if params["num_layers"] > 1 else 0.0 # dropout only works for >1 layers
 
     # TRAIN TEST SPLIT
@@ -234,7 +234,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=30, show_progress_bar=True)
+study.optimize(objective, n_trials=60, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict
