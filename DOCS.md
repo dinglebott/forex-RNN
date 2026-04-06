@@ -96,6 +96,37 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 5.4
+*Changes from v5.3: Fix leaking in swinghigh and swinglow*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["high_return", "low_return", "adx_direction", "ema_cross", "bb_position", "macd_hist", "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14", "volatility_regime", "bb_width", "atr_14", "vol_ratio", "vol_momentum", "smooth_return", "dist_smooth"]\
+**Hyperparameters:**\
+hidden_size: 500\
+num_layers: 1\
+dropout: 0.1\
+lookback: 45\
+optimiser: RMSprop\
+lr: 1e-4\
+weight_decay: 4e-5\
+batch_size: 512\
+clip_grad_norm: 5.75\
+num_filters: 128\
+kernel_size: 9\
+**Cost matrix parameters:** 1.3, 0.02\
+**Cost score:** 0.5370\
+**F1 score (macro-averaged):** 0.4074\
+**Train F1 score:** 0.4299\
+**Log loss:** 1.0783\
+**ROC-AUC score:** 0.5832\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 176 | 185 | 125 |
+| Real ~ | 119 | 261 | 107 |
+| Real + | 171 | 181 | 182 |
+<br/>
+
 ### Model 5.3
 *Changes from v5.2: Tune CNN strength up*\
 **Train:** 2005 - 2024\

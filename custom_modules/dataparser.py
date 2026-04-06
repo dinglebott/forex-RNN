@@ -138,8 +138,12 @@ def parseData(jsonPath):
         roll_max = close.rolling(window=2 * n + 1, center=True).max()
         roll_min = close.rolling(window=2 * n + 1, center=True).min()
 
-        swing_highs = close.where(close == roll_max) # NaN everywhere else
+        swing_highs = close.where(close == roll_max)
         swing_lows  = close.where(close == roll_min)
+
+        # A swing at bar t is only confirmed n bars later
+        swing_highs = swing_highs.shift(n)
+        swing_lows  = swing_lows.shift(n)
 
         return swing_highs, swing_lows
 
@@ -198,7 +202,7 @@ def parseData(jsonPath):
     df = pd.concat([df, swing_distances], axis=1)
 
     # lagged features
-    for lag in range(1, 4):
+    for lag in range(1, 5):
         df[f"close_lag{lag}"] = df["close_return"].shift(lag)
         df[f"vol_lag{lag}"] = df["vol_return"].shift(lag)
 
