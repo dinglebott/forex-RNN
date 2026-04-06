@@ -114,17 +114,17 @@ clip_grad_norm: 5.75\
 num_filters: 128\
 kernel_size: 9\
 **Cost matrix parameters:** 1.3, 0.02\
-**Cost score:** 0.5370\
-**F1 score (macro-averaged):** 0.4074\
-**Train F1 score:** 0.4299\
-**Log loss:** 1.0783\
-**ROC-AUC score:** 0.5832\
+**Cost score:** 0.5348\
+**F1 score (macro-averaged):** 0.4106\
+**Train F1 score:** 0.4285\
+**Log loss:** 1.0792\
+**ROC-AUC score:** 0.5797\
 **Confusion matrix:**
 | &nbsp; | Pred - | Pred ~ | Pred + |
 | --- | --- | --- | --- |
-| Real - | 176 | 185 | 125 |
-| Real ~ | 119 | 261 | 107 |
-| Real + | 171 | 181 | 182 |
+| Real - | 174 | 182 | 130 |
+| Real ~ | 115 | 264 | 108 |
+| Real + | 172 | 176 | 186 |
 <br/>
 
 ### Model 5.3
