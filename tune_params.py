@@ -47,6 +47,7 @@ with open(filepath, "r") as file:
 # extract positive features into list
 featureList = [key for key in rawFeatures if rawFeatures[key] >= 0] # -1 for all features, 0 for positive only'''
 featureList = [
+    "high_return", "low_return",
     "adx_direction", "ema_cross", "bb_position", "macd_hist",
     "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14",
     "volatility_regime", "bb_width", "atr_14",
@@ -113,12 +114,12 @@ def objective(trial):
         "num_layers": trial.suggest_categorical("num_layers", [1, 2])
     }
     dropout = trial.suggest_float("dropout", 0.05, 0.2) # for CNN
-    lookback = trial.suggest_categorical("lookback", [20, 25])
+    lookback = trial.suggest_categorical("lookback", [35, 40, 45, 50])
     optimiserName = trial.suggest_categorical("optimiser", ["RMSprop"])
     learningRate = trial.suggest_float("lr", 5e-5, 4e-4)
     weightDecay = trial.suggest_float("weight_decay", 1e-5, 1e-4)
-    batchSize = trial.suggest_categorical("batch_size", [384, 512, 768, 1024])
-    clipGradNorm = trial.suggest_float("clip_grad_norm", 5.5, 6.5)
+    batchSize = trial.suggest_categorical("batch_size", [384, 512, 768])
+    clipGradNorm = trial.suggest_float("clip_grad_norm", 5.0, 7.0)
     if arch == 1:
         numFilters = trial.suggest_categorical("num_filters", [64, 96, 128])
         kernelSize = trial.suggest_categorical("kernel_size", [5, 7, 9])
@@ -234,7 +235,7 @@ def objective(trial):
 
 # MAIN OPTUNA MAGIC
 study = optuna.create_study(direction="minimize")
-study.optimize(objective, n_trials=60, show_progress_bar=True)
+study.optimize(objective, n_trials=80, show_progress_bar=True)
 
 # PRINT AND SAVE RESULTS
 print(study.best_params) # a python dict

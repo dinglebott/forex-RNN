@@ -213,8 +213,8 @@ def parseData(jsonPath):
 def addTarget(df):
     df["forward_return"] = df["close"].shift(-2) - df["close"]
     conditions = [
-        df["forward_return"] < -0.001, # downward move
-        df["forward_return"] > 0.001 # upward move
+        df["forward_return"] < -0.0004, # downward move
+        df["forward_return"] > 0.0004 # upward move
     ]
     choices = [0, 2]
     df["target"] = np.select(conditions, choices, default=1) # if not up or down, return flat (1)

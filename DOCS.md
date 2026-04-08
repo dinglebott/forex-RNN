@@ -1,8 +1,11 @@
 ## RAW DATA COLLECTION
-Instrument: EUR_USD at 4-hourly timeframe\
+Instrument: EUR_USD at 4-hour and 1-hour timeframe (H4, H1)\
 Candle data: OHLCV (open, high, low, close, volume)\
 Time period: 2005-01-01 to 2026-01-01\
 Pulled from OANDA REST-v20 API, stored in JSON format\
+Target variable: direction of price movement after *n* candles: Up/down if movement exceeds *x* pips, else flat\
+For H4: *n* = 2, *x* = 10\
+For H1: *n* = 2, *x* = 4\
 <br/>
 
 ## DATASETS
@@ -11,8 +14,7 @@ Train: 2005-2023\
 Validate: 2024 (used for early stopping of epochs)\
 Test: 2025 (used to produce baseline F1 score, and for permuting)\
 **Hyperparameter tuning (Optuna):**\
-Train/Validate: 2005-2024 (split handled by TimeSeriesSplit cross-validation with 3 folds)\
-Test: 2025 (used to produce F1 score for Optuna to maximise)\
+Train/Validate: 2005-2024 (Cross-validation with 3 folds)\
 **Final model training:**\
 Train: 2010-2024\
 Test: 2025\

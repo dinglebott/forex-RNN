@@ -30,7 +30,7 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
     classCounts = np.bincount(labels.astype(int)) # no. of each class
     classWeights = 1.0 / classCounts # majority class => smaller weight and vice versa
     classWeights = (classWeights / classWeights.sum()) * len(classWeights) # normalise
-    classWeights = classWeights * np.array([1.07, 1.0, 1.07]) # for manual adjusting (all 1.0 for default)
+    classWeights = classWeights * np.array([1.2, 1.0, 1.2]) # for manual adjusting (all 1.0 for default)
     weightsTensor = torch.tensor(classWeights, dtype=torch.float32, device=device) # penalise mistakes on minority classes more
     
     class CostSensitiveLoss(torch.nn.Module):
@@ -50,6 +50,7 @@ def optimiserBundle(model, labels, device, optimiser_name, learning_rate, weight
             return loss
 
     criterion = CostSensitiveLoss(penMatrix, weightsTensor) # function to minimise
+    criterion = torch.nn.CrossEntropyLoss(weight=weightsTensor) # standard CE: comment out when not needed
     optimiserClass = {"AdamW": torch.optim.AdamW, "RMSprop": torch.optim.RMSprop}[optimiser_name]
     optimiser = optimiserClass(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, mode="min", factor=0.5, patience=scheduler_patience, min_lr=1e-6)
