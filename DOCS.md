@@ -98,6 +98,36 @@ Precision (0-1) => Correctly predicted 1's / All predicted 1's\
 Recall (0-1) => Correctly predicted 1's / All real 1's\
 <br/>
 
+### Model 5.5
+*Changes from v5.4: Train for H1*\
+**Train:** 2005 - 2024\
+**Test:** 2025\
+**Features:** ["high_return", "low_return", "adx_direction", "ema_cross", "bb_position", "macd_hist", "upper_wick", "lower_wick", "dist_high", "dist_low", "dist_ema15", "rsi_14", "volatility_regime", "bb_width", "atr_14", "vol_ratio", "vol_momentum", "smooth_return", "dist_smooth"]\
+**Hyperparameters:**\
+hidden_size: 480\
+num_layers: 1\
+dropout: 0.19903\
+lookback: 40\
+optimiser: RMSprop\
+lr: 9.6139e-4\
+weight_decay: 9.6860e-5\
+batch_size: 768\
+clip_grad_norm: 6.7215\
+num_filters: 64\
+kernel_size: 5\
+**Cost matrix parameters:** 1.3, 0.02\
+**F1 score (macro-averaged):** 0.4138\
+**Train F1 score:** 0.4400\
+**Log loss:** 1.0695\
+**ROC-AUC score:** 0.6005\
+**Confusion matrix:**
+| &nbsp; | Pred - | Pred ~ | Pred + |
+| --- | --- | --- | --- |
+| Real - | 826 | 656 | 612 |
+| Real ~ | 470 | 997 | 429 |
+| Real + | 760 | 686 | 738 |
+<br/>
+
 ### Model 5.4
 *Changes from v5.3: Fix leaking in swinghigh and swinglow*\
 **Train:** 2005 - 2024\
