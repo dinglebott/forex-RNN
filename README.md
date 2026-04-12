@@ -1,12 +1,13 @@
 ## About project
-**GOAL: Predict the direction of future price movements in forex markets by training a neural network**\
+**GOAL: Predict the direction of forex prices with a neural network**\
 This is part 2 of the whole forex prediction project, where I experiment with neural network architectures such as CNN and LSTM. See below for the rest of the project.\
 CNN (Convolutional Neural Network) is a model that uses kernels to filter out local patterns in the data (~ 3 candles), and abstracts it into inputs for the LSTM to train on. It performs well in pattern recognition and spatial data.\
-LSTM (Long Short-Term Memory) is a type of Recurrent Neural Network which performs well in sequential data like time series, due to its "memory" of previous time windows.\
+LSTM (Long Short-Term Memory) is a type of recurrent neural network which performs well in sequential data like time series, due to its "memory" of previous time windows.\
 *See DOCS.md for detailed results and workflow*\
 <br/>
 Part 1: [trading-trees](https://github.com/dinglebott/trading-trees), using a tree-based architecture (XGBoost)\
 Part 3: [money-meta](https://github.com/dinglebott/money-meta), ensembling models from parts 1 and 2\
+Part 4: [torque-tempo](https://github.com/dinglebott/torque-tempo), using MOMENT foundation model\
 <br/>
 
 ## Outline of methodology
@@ -33,8 +34,8 @@ The code fetches from the api-fxtrade.oanda.com live server, so if your key is f
 <br/>
 
 ## How to use a model
-Run `use_model.py`, the prediction and confidence will be printed to the terminal.\
-Remember to set the correct global variables. Obviously make sure you have the correct model trained for your use case first.\
+Run `use_model.py`, the prediction and probabilities will be printed to the terminal.\
+Remember to set the correct global variables.\
 <br/>
 
 ## Why?????
